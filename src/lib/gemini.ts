@@ -3,7 +3,7 @@ import * as FileSystem from 'expo-file-system/legacy'
 import { getExpoPublicGeminiKey } from './expoPublicEnv'
 
 const GEMINI_API_KEY = getExpoPublicGeminiKey()
-const MODEL_NAME = 'gemini-1.5-flash'
+const MODEL_NAME = 'gemini-2.5-flash'
 
 const EXTRACTION_PROMPT = `You are a language learning assistant. Extract all unique vocabulary words
 from this document that would be useful for language learners.

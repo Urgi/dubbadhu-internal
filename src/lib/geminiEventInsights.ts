@@ -8,8 +8,17 @@ export const ANALYTICS_GEMINI_CONTEXT_EVENT_LIMIT = 10_000
 /** Max rows serialized into a Gemini prompt (full JSON payloads get huge fast). */
 export const ANALYTICS_GEMINI_PROMPT_EVENT_LIMIT = 2_000
 
-/** Try stable models first; older model IDs may be retired for some API keys. */
-const MODELS = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-flash-8b'] as const
+/** Current Flash IDs only — Gemini 1.5 was retired and 404s on generateContent. */
+const MODELS = [
+  'gemini-2.5-flash',
+  'gemini-2.5-flash-lite',
+  'gemini-3.5-flash',
+  'gemini-flash-latest',
+] as const
+
+function isRetiredOrMissingModelError(message: string): boolean {
+  return /404|not found|not supported for generateContent/i.test(message)
+}
 
 export type GeminiAnalyticsOk = { ok: true; text: string; sourceLabel: string }
 export type GeminiAnalyticsErr = { ok: false; error: string }
@@ -32,7 +41,7 @@ async function generateText(prompt: string): Promise<{ text: string } | { error:
   }
 
   const genAI = new GoogleGenerativeAI(key)
-  let lastError = 'No response from Gemini (empty or blocked). Check API key and model access.'
+  const failures: string[] = []
 
   for (const modelName of MODELS) {
     try {
@@ -51,13 +60,21 @@ async function generateText(prompt: string): Promise<{ text: string } | { error:
         }
       }
       if (text?.trim()) return { text: text.trim() }
-      lastError = `Model ${modelName} returned an empty response (safety filter or oversized prompt).`
+      failures.push(`${modelName}: empty response (safety filter or oversized prompt)`)
     } catch (err) {
-      lastError = err instanceof Error ? err.message : String(err)
-      if (modelName === MODELS[MODELS.length - 1]) return { error: lastError }
+      const message = err instanceof Error ? err.message : String(err)
+      failures.push(`${modelName}: ${message}`)
+      if (!isRetiredOrMissingModelError(message)) {
+        // Quota / key / payload errors will hit every model — don't keep retrying.
+        return { error: message }
+      }
     }
   }
-  return { error: lastError }
+  return {
+    error:
+      failures[failures.length - 1] ||
+      'No response from Gemini. Check API key and model access.',
+  }
 }
 
 /** Insights use `analytics_events` rows only (no aggregated daily summary). */
