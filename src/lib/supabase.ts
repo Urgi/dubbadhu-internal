@@ -24,8 +24,31 @@ if (__DEV__ && !SUPABASE_SERVICE_ROLE_KEY) {
   )
 }
 
+function describeSupabaseKeyRole(key: string): string {
+  if (!key) return 'missing'
+  if (key.startsWith('sb_publishable_') || key.startsWith('sb_publishable')) return 'publishable_anon'
+  try {
+    const payload = key.split('.')[1]
+    if (!payload) return 'unknown'
+    const padded = payload.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - (payload.length % 4)) % 4)
+    const json = JSON.parse(globalThis.atob(padded)) as { role?: string }
+    return json.role || 'unknown'
+  } catch {
+    return 'unknown'
+  }
+}
+
 /** Prefer service role so admin mutations work after anon write revoke. */
 const clientKey = SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY
+
+if (__DEV__) {
+  console.log(
+    '[supabase] client key role=',
+    describeSupabaseKeyRole(clientKey),
+    'hasServiceRoleEnv=',
+    Boolean(SUPABASE_SERVICE_ROLE_KEY),
+  )
+}
 
 const supabase = createClient(SUPABASE_URL, clientKey)
 

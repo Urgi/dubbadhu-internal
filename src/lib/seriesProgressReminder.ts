@@ -1,5 +1,5 @@
-import * as Notifications from 'expo-notifications'
 import * as FileSystem from 'expo-file-system/legacy'
+import { getExpoNotifications } from './expoNotifications'
 import supabase from './supabase'
 
 export const REMINDER_NOTIFICATION_PREFIX = 'series_progress_16h_reminder_'
@@ -9,8 +9,10 @@ export const REMINDER_WAKE_HOUR = 8 // 8:00 AM
 export const REMINDER_SLEEP_HOUR = 23 // 11:00 PM
 export const DEFAULT_SCHEDULE_COUNT = 36 // ~2-3 days of hourly waking notifications
 
+const Notifications = getExpoNotifications()
+
 /** Setup notification presentation behavior on app boot. */
-Notifications.setNotificationHandler({
+Notifications?.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
     shouldPlaySound: true,
@@ -145,6 +147,7 @@ export function generateReminderDates(
  * Cancels all previously scheduled series progress reminder notifications.
  */
 export async function cancelAllSeriesProgressReminders(): Promise<void> {
+  if (!Notifications) return
   try {
     const scheduled = await Notifications.getAllScheduledNotificationsAsync()
     for (const notif of scheduled) {
@@ -174,6 +177,9 @@ export async function refreshSeriesProgressReminder(options?: {
   scheduleCount?: number
   delaySecondsOverride?: number
 }): Promise<{ ok: boolean; scheduledCount?: number; firstTrigger?: string; error?: string }> {
+  if (!Notifications) {
+    return { ok: false, error: 'Notifications native module unavailable' }
+  }
   try {
     // 1. Ensure notification permissions
     const { status: existingStatus } = await Notifications.getPermissionsAsync()

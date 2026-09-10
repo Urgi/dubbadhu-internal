@@ -1,12 +1,14 @@
-import * as Notifications from 'expo-notifications'
 import Constants from 'expo-constants'
 import { Platform } from 'react-native'
+import { getExpoNotifications } from './expoNotifications'
 import supabase from './supabase'
 
 export const ADMIN_USER_ID = '7c39d3b7-72f3-4b2d-ad1c-4225404ffb63'
 
 export async function registerAdminPushToken(): Promise<string | null> {
   try {
+    const Notifications = getExpoNotifications()
+    if (!Notifications) return null
     const { status: existingStatus } = await Notifications.getPermissionsAsync()
     let finalStatus = existingStatus
     if (existingStatus !== 'granted') {
