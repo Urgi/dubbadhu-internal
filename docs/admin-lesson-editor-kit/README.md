@@ -1,8 +1,6 @@
 ## Admin Lesson Editor Kit (drop-in)
 
-Copy this entire folder into your admin app repo (anywhere, e.g. `docs/admin-lesson-editor-kit/`).
-
-This kit is the **single source of context** for building an admin UI that edits Dubbadhu lessons stored in Supabase, with strong validation to minimize app-breaking edits.
+This kit lives in **Dubbadhu Internal** (`docs/admin-lesson-editor-kit/`). It is the **single source of context** for the lesson editor UI that edits Dubbadhu lessons stored in Supabase, with strong validation to minimize app-breaking edits.
 
 ### Files included (copy all)
 
@@ -16,7 +14,7 @@ If you want everything co-located, you can also copy the three `../admin-lesson-
 
 ---
 
-## What your admin app should do (minimal, safe)
+## What Dubbadhu Internal should do (minimal, safe)
 
 ### 1) Load lesson
 - Table: `public.lessons`
@@ -43,7 +41,7 @@ If you want everything co-located, you can also copy the three `../admin-lesson-
 
 Use `docs/admin-lesson-editing-spec.schema.json` to validate `lessons.content`.
 
-If your admin app is TypeScript, also import the types from:
+In Dubbadhu Internal (TypeScript), also import the types from:
 - `docs/admin-lesson-editing-types.ts`
 
 ---

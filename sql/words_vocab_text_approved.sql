@@ -5,7 +5,7 @@ alter table public.words
   add column if not exists vocab_text_approved boolean not null default true;
 
 comment on column public.words.vocab_text_approved is
-  'When false (Vocabulary series in internal app), voice actor must approve text in Vocab Center before the word appears in the vocabulary recording queue.';
+  'When false (Vocabulary series in Dubbadhu Internal), voice actor must approve text in Vocab Center before the word appears in the vocabulary recording queue.';
 
 update public.words w
 set vocab_text_approved = false

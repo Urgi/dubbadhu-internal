@@ -1,6 +1,6 @@
 -- Fix: Audio exposure "Save screen" never shows translation conflict — lookups return zero rows.
 --
--- The Voice Recording app uses the Supabase ANON key without a JWT (see src/lib/supabase.ts).
+-- Dubbadhu Internal uses the Supabase ANON key without a JWT (see src/lib/supabase.ts).
 -- The Table Editor uses the postgres role and bypasses RLS, so you still see rows in the dashboard
 -- while the app gets empty SELECT results if RLS is ON and anon has no SELECT on public.words.
 --

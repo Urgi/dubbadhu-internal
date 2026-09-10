@@ -57,7 +57,7 @@ export function isSupabaseConfigured(): boolean {
   return Boolean(getExpoPublicSupabaseUrl() && getExpoPublicSupabaseAnonKey())
 }
 
-/** Shared with Edge Function secret VOCAB_BATCH_SECRET (internal admin app only). */
+/** Shared with Edge Function secret VOCAB_BATCH_SECRET (Dubbadhu Internal only). */
 export function getExpoPublicVocabBatchSecret(): string {
   return (
     process.env.EXPO_PUBLIC_VOCAB_BATCH_SECRET ||

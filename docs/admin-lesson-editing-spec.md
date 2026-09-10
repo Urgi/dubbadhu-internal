@@ -1,6 +1,6 @@
-# Admin lesson editing spec (Dubbadhu)
+# Lesson editing spec (Dubbadhu Internal)
 
-This file is meant to be copied into your **admin app** repo so it has the right context to safely **edit lessons in Supabase** that the Dubbadhu app will render.
+This spec lives in **Dubbadhu Internal** so editors have the right context to safely **edit lessons in Supabase** that the learner-facing Dubbadhu app will render.
 
 It documents:
 - Supabase tables + fields you’ll edit
@@ -36,7 +36,7 @@ In Dubbadhu, lessons are fetched as:
 select content from lessons where id = :lessonKey;
 ```
 
-So your admin app should primarily **edit `lessons.content`** (and optionally keep `title/series_id/lesson_number/next_lesson_id` consistent).
+So Dubbadhu Internal should primarily **edit `lessons.content`** (and optionally keep `title/series_id/lesson_number/next_lesson_id` consistent).
 
 ---
 
@@ -454,14 +454,14 @@ For these, your admin UI should either:
 The Dubbadhu app uses `screens` order directly. Reordering is safe if each screen remains valid.
 
 ### “Preview in Dubbadhu”
-If you keep Dubbadhu remote-first enabled, you can edit in admin → reopen lesson in Dubbadhu → it renders immediately.
+If you keep Dubbadhu remote-first enabled, you can edit in Dubbadhu Internal → reopen the lesson in the learner app → it renders immediately.
 
 ---
 
 ## Known compatibility quirks (don’t fight them)
 
 - Some screens support multiple historic formats (e.g. `concept`, `quiz`, `speakingPractice`).
-  - Your admin app should output one “preferred” format per type (documented above).
+  - Dubbadhu Internal should output one “preferred” format per type (documented above).
 - `CelebrateScreen` is PascalCase; most others are camelCase/kebab-case.
 - `audioExposure.words[].audioRef` is optional; Dubbadhu will run in text-only mode when missing.
 

@@ -20,7 +20,7 @@ if (__DEV__ && (!SUPABASE_URL || !SUPABASE_ANON_KEY)) {
 
 if (__DEV__ && !SUPABASE_SERVICE_ROLE_KEY) {
   console.warn(
-    '[supabase] SUPABASE_SERVICE_ROLE_KEY missing — catalog/config writes will fail after RLS lockdown. Set it in .env (admin app only).',
+    '[supabase] SUPABASE_SERVICE_ROLE_KEY missing — catalog/config writes will fail after RLS lockdown. Set it in .env (Dubbadhu Internal only).',
   )
 }
 

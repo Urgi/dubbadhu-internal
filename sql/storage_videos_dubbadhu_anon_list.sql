@@ -2,7 +2,8 @@
 -- It requires SELECT on `storage.objects` for that bucket — "bucket is public" alone is not enough for listing.
 --
 -- Bucket id must match exactly (case-sensitive): Videos-Dubbadhu — same as in:
---   Dubbadhu-Voice-Recording/src/lib/videosDubbadhuStorage.ts → VIDEOS_DUBBADHU_BUCKET
+--   src/lib/videosDubbadhuStorage.ts → VIDEOS_DUBBADHU_BUCKET
+--   (legacy clone folder name: Dubbadhu-Voice-Recording)
 --
 -- Run in Supabase SQL Editor for the project behind EXPO_PUBLIC_SUPABASE_URL.
 

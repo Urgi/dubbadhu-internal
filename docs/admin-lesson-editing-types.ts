@@ -1,7 +1,6 @@
 /**
- * Copy into your admin app.
- *
- * Types for `lessons.content` (Supabase) used by Dubbadhu.
+ * Types for `lessons.content` (Supabase) used by Dubbadhu Internal
+ * when editing lessons that the learner-facing Dubbadhu app renders.
  * These mirror `features/LessonTab/LessonModules/screenRegistry.js`.
  */
 

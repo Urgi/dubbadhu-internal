@@ -1,5 +1,5 @@
 -- Pair with Dubbadhu/supabase/migrations/20260515120000_words_anon_insert_vocabulary_only.sql
--- Apply via Supabase SQL Editor if you manage RLS manually (internal app uses anon key).
+-- Apply via Supabase SQL Editor if you manage RLS manually (Dubbadhu Internal uses anon key).
 
 drop policy if exists "words_insert_vocabulary_anon" on public.words;
 drop policy if exists "words_insert_vocabulary_authenticated" on public.words;

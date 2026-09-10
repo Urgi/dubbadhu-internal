@@ -1,4 +1,4 @@
--- Allow the Voice-Recording admin app (anon key) to upload Gemini-generated quiz images.
+-- Allow Dubbadhu Internal (anon key) to upload Gemini-generated quiz images.
 -- Prefer applying via migration: Dubbadhu/supabase/migrations/20260520180000_word_comparison_images_storage_policies.sql
 -- Or run this file once in Supabase SQL Editor (same project as EXPO_PUBLIC_SUPABASE_URL).
 

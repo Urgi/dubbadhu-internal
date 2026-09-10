@@ -1,4 +1,4 @@
-## Paste this into Cursor in the admin app repo
+## Paste this into Cursor in the Dubbadhu Internal repo
 
 You are building an **Admin Lesson Editor** for the Dubbadhu curriculum stored in **Supabase Postgres**.
 
@@ -28,8 +28,8 @@ The Dubbadhu app fetches:
 select content from lessons where id = :lessonKey;
 ```
 
-### The content contract (import these in the admin app)
-In the Dubbadhu repo, copy these files into your admin repo:
+### The content contract (import these in Dubbadhu Internal)
+These files already live in this repo:
 - `docs/admin-lesson-editing-spec.md` (human-readable spec)
 - `docs/admin-lesson-editing-spec.schema.json` (JSON Schema to validate `lessons.content`)
 - `docs/admin-lesson-editing-types.ts` (TypeScript types)
