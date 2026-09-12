@@ -418,7 +418,7 @@ export default function AdminVocabIllustrationReviewScreen({ navigation }: Props
     const { data, error: err } = await supabase
       .from('words')
       .select('*')
-      .eq('series', VOCABULARY_MERGED_SERIES)
+      .ilike('series', 'vocabulary')
       .eq('vocab_text_approved', true)
       .in('language', langVals)
       .in('status', ['pending', 'rerecord_requested'])
@@ -683,7 +683,7 @@ export default function AdminVocabIllustrationReviewScreen({ navigation }: Props
     const { data: dupRows, error: dupErr } = await supabase
       .from('words')
       .select('id')
-      .eq('series', VOCABULARY_MERGED_SERIES)
+      .ilike('series', 'vocabulary')
       .in('language', langVals)
       .ilike('word', escapeForILikeExact(nextWord))
       .limit(3)

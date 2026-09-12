@@ -10,6 +10,13 @@ export const VOICE_BANK_LANGUAGE = 'Afaan Oromo'
  */
 export const VOCABULARY_MERGED_SERIES = 'Vocabulary'
 
+/** PostgREST `eq` is case-sensitive; prod rows may be Vocabulary / vocabulary / VOCABULARY. */
+export function isVocabularySeriesValue(series: string | null | undefined): boolean {
+  return String(series ?? '')
+    .trim()
+    .toLowerCase() === 'vocabulary'
+}
+
 /** Normalized key for matching `lesson_series.id` (e.g. series2) to `words.series` (e.g. "Series 2"). */
 export function seriesKey(s: string): string {
   return s.trim().toLowerCase().replace(/\s+/g, '')

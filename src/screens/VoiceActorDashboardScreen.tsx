@@ -21,6 +21,7 @@ import supabase from '../lib/supabase'
 import {
   VOCABULARY_MERGED_SERIES,
   VOICE_BANK_LANGUAGE,
+  isVocabularySeriesValue,
   voiceBankLanguageSqlValues,
 } from '../lib/voiceBankLabels'
 import { normalizeRecordingStatus, normalizeRecordingWords } from '../lib/wordStatus'
@@ -71,11 +72,11 @@ export default function VoiceActorDashboardScreen({ navigation }: Props) {
       supabase
         .from('words')
         .select('series, language, status')
-        .or(`series.is.null,series.neq.${VOCABULARY_MERGED_SERIES}`),
+        .or('series.is.null,series.not.ilike.vocabulary'),
       supabase
         .from('words')
         .select('series, language, status')
-        .eq('series', VOCABULARY_MERGED_SERIES)
+        .ilike('series', 'vocabulary')
         .eq('vocab_text_approved', true)
         .in('language', langVals),
     ])
@@ -187,7 +188,7 @@ export default function VoiceActorDashboardScreen({ navigation }: Props) {
       supabase
         .from('words')
         .select('*')
-        .eq('series', VOCABULARY_MERGED_SERIES)
+        .ilike('series', 'vocabulary')
         .eq('vocab_text_approved', true)
         .in('language', langVals)
         .in('status', ['pending', 'rerecord_requested'])
@@ -196,7 +197,7 @@ export default function VoiceActorDashboardScreen({ navigation }: Props) {
         .from('words')
         .select('*')
         .in('status', ['pending', 'rerecord_requested'])
-        .or(`series.is.null,series.neq.${VOCABULARY_MERGED_SERIES}`)
+        .or('series.is.null,series.not.ilike.vocabulary')
         .order('series', { ascending: true })
         .order('word', { ascending: true }),
     ])
@@ -218,11 +219,11 @@ export default function VoiceActorDashboardScreen({ navigation }: Props) {
       if (item.pending + item.rerecordRequested <= 0) return
       const langVals = voiceBankLanguageSqlValues()
       const q =
-        item.series === VOCABULARY_MERGED_SERIES
+        isVocabularySeriesValue(item.series)
           ? supabase
               .from('words')
               .select('*')
-              .eq('series', VOCABULARY_MERGED_SERIES)
+              .ilike('series', 'vocabulary')
               .eq('vocab_text_approved', true)
               .in('language', langVals)
               .in('status', ['pending', 'rerecord_requested'])
@@ -257,7 +258,7 @@ export default function VoiceActorDashboardScreen({ navigation }: Props) {
         return
       }
       if (item.recorded > 0) {
-        if (item.series === VOCABULARY_MERGED_SERIES) {
+        if (isVocabularySeriesValue(item.series)) {
           openAwaitingApproval({ vocabOnly: true })
         } else {
           openAwaitingApproval({ series: item.series, language: item.language })

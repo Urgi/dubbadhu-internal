@@ -54,7 +54,7 @@ export default function VoiceActorAwaitingApprovalScreen({ navigation, route }: 
     if (vocabOnly) {
       const langVals = voiceBankLanguageSqlValues()
       q = q
-        .eq('series', VOCABULARY_MERGED_SERIES)
+        .ilike('series', 'vocabulary')
         .eq('vocab_text_approved', true)
         .in('language', langVals)
     } else if (series != null && language != null) {
@@ -67,7 +67,7 @@ export default function VoiceActorAwaitingApprovalScreen({ navigation, route }: 
           .from('words')
           .select('*')
           .eq('status', 'recorded')
-          .eq('series', VOCABULARY_MERGED_SERIES)
+          .ilike('series', 'vocabulary')
           .eq('vocab_text_approved', true)
           .in('language', langVals)
           .order('word', { ascending: true }),
