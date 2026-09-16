@@ -39,8 +39,9 @@ export type RootStackParamList = {
   AdminHome: undefined
   /** Hub section drill-in (tiles for analytics / assets / moderation). */
   AdminHubSection: { section: 'analytics' | 'assets' | 'moderation' }
-  /** In-app Gemini chat with bundled Dubbadhu ecosystem context (both apps). */
-  LubbuDubbadhu: undefined
+  /** Multi-turn thinking desk (replaces the LubbuDubbadhu Gemini-chat stub). */
+  Obsidian: undefined
+  ObsidianThread: { threadId: string; title?: string }
   AdminAnalytics: undefined
   /** Registered learners list, or active-today (max 10) when mode is set. */
   AdminUsers:
