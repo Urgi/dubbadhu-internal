@@ -4,7 +4,7 @@ export type ObsidianRole = (typeof MESSAGE_ROLES)[number]
 export const CREW_ROUTES = ['ace', 'moti', 'jack', 'queen', 'nigus'] as const
 export type AceRoute = (typeof CREW_ROUTES)[number]
 
-export const URGENCIES = ['low', 'normal', 'high'] as const
+export const URGENCIES = ['low', 'normal', 'high', 'urgent'] as const
 export type Urgency = (typeof URGENCIES)[number]
 
 export const MESSAGE_STATUSES = ['pending', 'done', 'blocked', 'failed'] as const

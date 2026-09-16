@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   RefreshControl,
@@ -12,51 +13,65 @@ import {
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { StackScreenProps } from '@react-navigation/stack'
+import { useHeaderHeight } from '@react-navigation/elements'
 import { AdminTextInput } from '../components/AdminTextInput'
+import ObsidianActivitySummary from '../components/obsidian/ObsidianActivitySummary'
+import ObsidianDelegateSheet from '../components/obsidian/ObsidianDelegateSheet'
+import ObsidianJobCard from '../components/obsidian/ObsidianJobCard'
+import ObsidianMarkdown from '../components/obsidian/ObsidianMarkdown'
 import { ADMIN_ACCENT_GOLD } from '../components/lesson-config/AdminLessonConfigChrome'
 import {
-  OBSIDIAN_CREW_ROUTES,
-  OBSIDIAN_ROLE_LABEL,
   applyRealtimeMessage,
   invokeObsidianChat,
   invokeObsidianHandoff,
   listObsidianMessages,
+  OBSIDIAN_ROLE_LABEL,
   subscribeObsidianMessages,
   unsubscribeObsidianMessages,
+  updateObsidianMessageContent,
+  updateObsidianThreadTitle,
   type ObsidianCrewRoute,
   type ObsidianMessage,
-  type ObsidianRole,
 } from '../lib/obsidian'
+import { crewDisplayName, isCrewRouteName, OBSIDIAN_CREW } from '../lib/obsidianCrew'
+import {
+  dateKey,
+  formatClock,
+  formatDayLabel,
+  looksLikeDataQuestion,
+  parseObsidianJob,
+  serializeObsidianJob,
+  type ObsidianJobPayload,
+} from '../lib/obsidianJob'
+import { parseActivitySummary } from '../lib/obsidianActivity'
 import type { RootStackParamList } from '../types'
 
 type Props = StackScreenProps<RootStackParamList, 'ObsidianThread'>
 
-const ROLE_COLOR: Record<ObsidianRole, string> = {
-  user: '#e5e7eb',
-  chatgpt: '#93c5fd',
-  ace: ADMIN_ACCENT_GOLD,
-  moti: '#f9a8d4',
-  jack: '#86efac',
-  queen: '#c4b5fd',
-  nigus: '#fdba74',
-}
-
-function crewLabel(route: ObsidianCrewRoute): string {
-  return route[0].toUpperCase() + route.slice(1)
+function isJobCard(row: ObsidianMessage): boolean {
+  if (parseObsidianJob(row.content)) return true
+  return isCrewRouteName(row.role) && row.status !== null
 }
 
 export default function ObsidianThreadScreen({ navigation, route }: Props) {
   const threadId = route.params.threadId
-  const [title] = useState(route.params.title ?? 'Thread')
+  const [threadTitle, setThreadTitle] = useState(route.params.title ?? 'New thread')
   const [messages, setMessages] = useState<ObsidianMessage[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [sending, setSending] = useState(false)
   const [draft, setDraft] = useState('')
   const [error, setError] = useState('')
-  const [crewRoute, setCrewRoute] = useState<ObsidianCrewRoute | null>(null)
+  const [delegateOpen, setDelegateOpen] = useState(false)
+  const [delegateTarget, setDelegateTarget] = useState<ObsidianCrewRoute | null>(null)
+  const [assigningId, setAssigningId] = useState<string | null>(null)
+  const [expandedIds, setExpandedIds] = useState<Record<string, boolean>>({})
+  const [editing, setEditing] = useState<{ messageId: string; job: ObsidianJobPayload } | null>(null)
+  const [renameOpen, setRenameOpen] = useState(false)
+  const [renameDraft, setRenameDraft] = useState('')
   const scrollRef = useRef<ScrollView>(null)
   const insets = useSafeAreaInsets()
+  const headerHeight = useHeaderHeight()
 
   const load = useCallback(async () => {
     const result = await listObsidianMessages(threadId)
@@ -83,32 +98,58 @@ export default function ObsidianThreadScreen({ navigation, route }: Props) {
     }
   }, [load, threadId])
 
+  const pendingRow = useMemo(
+    () => messages.find((row) => row.status === 'pending') ?? null,
+    [messages],
+  )
+
+  const subtitle = useMemo(() => {
+    if (pendingRow && isCrewRouteName(pendingRow.role)) {
+      return `${crewDisplayName(pendingRow.role)} is working…`
+    }
+    if (pendingRow?.role === 'chatgpt' || sending) {
+      const lastUser = [...messages].reverse().find((row) => row.role === 'user')
+      if (looksLikeDataQuestion(lastUser?.content ?? draft)) return 'Reviewing Dubbadhu data…'
+      return 'Thinking…'
+    }
+    return 'Dubbadhu thinking desk'
+  }, [draft, messages, pendingRow, sending])
+
   useLayoutEffect(() => {
     navigation.setOptions({
-      title,
+      title: 'Obsidian',
+      headerBackTitle: 'Back',
+      headerTitleAlign: 'center',
       headerStyle: { backgroundColor: '#000000' },
-      headerTitleStyle: { fontSize: 15, fontWeight: '700', color: '#ffffff' },
       headerTintColor: '#ffffff',
+      headerTitle: () => (
+        <View style={{ alignItems: 'center', maxWidth: 220 }}>
+          <Text style={{ color: '#ffffff', fontSize: 16, fontWeight: '600', textAlign: 'center' }}>Obsidian</Text>
+          <Text style={{ color: '#8b8b8b', fontSize: 12, textAlign: 'center', marginTop: 1 }} numberOfLines={1}>
+            {subtitle}
+          </Text>
+        </View>
+      ),
     })
-  }, [navigation, title])
+  }, [navigation, subtitle])
 
+  const skipAutoScroll = useRef(true)
   useEffect(() => {
+    if (skipAutoScroll.current) {
+      skipAutoScroll.current = false
+      return
+    }
     const timer = setTimeout(() => {
       scrollRef.current?.scrollToEnd({ animated: true })
     }, 50)
     return () => clearTimeout(timer)
-  }, [messages.length])
+  }, [messages.length, sending])
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true)
     await load()
     setRefreshing(false)
   }, [load])
-
-  const pendingRow = useMemo(
-    () => messages.find((row) => row.status === 'pending') ?? null,
-    [messages],
-  )
 
   const mergeIncoming = useCallback((incoming: ObsidianMessage[]) => {
     setMessages((prev) => {
@@ -124,8 +165,9 @@ export default function ObsidianThreadScreen({ navigation, route }: Props) {
     setSending(true)
     setError('')
     setDraft('')
-    const result = crewRoute
-      ? await invokeObsidianHandoff({ threadId, content, route: crewRoute })
+    const target = delegateTarget
+    const result = target
+      ? await invokeObsidianChat({ threadId, content, draftJob: true, route: target })
       : await invokeObsidianChat({ threadId, content })
     setSending(false)
     if (!result.ok) {
@@ -133,11 +175,66 @@ export default function ObsidianThreadScreen({ navigation, route }: Props) {
       setError(result.error)
       return
     }
+    setDelegateTarget(null)
     mergeIncoming(result.messages)
-  }, [crewRoute, draft, mergeIncoming, sending, threadId])
+  }, [delegateTarget, draft, mergeIncoming, sending, threadId])
 
-  const talkingTo = crewRoute ? crewLabel(crewRoute) : 'Obsidian'
+  const assignJob = useCallback(
+    async (message: ObsidianMessage, job: ObsidianJobPayload) => {
+      if (assigningId) return
+      setAssigningId(message.id)
+      setError('')
+      const result = await invokeObsidianHandoff({
+        threadId,
+        content: job.objective,
+        route: job.assignedAgentId,
+        goal: job.objective,
+        deliverable: job.deliverable,
+        context: job.contextSummary,
+        urgency: job.priority,
+        draftMessageId: message.id,
+        assignOnly: true,
+      })
+      setAssigningId(null)
+      if (!result.ok) {
+        setError(result.error)
+        return
+      }
+      mergeIncoming(result.messages)
+    },
+    [assigningId, mergeIncoming, threadId],
+  )
+
+  const saveEdit = useCallback(async () => {
+    if (!editing) return
+    const result = await updateObsidianMessageContent(editing.messageId, serializeObsidianJob(editing.job))
+    if (result.error || !result.data) {
+      setError(result.error || 'Could not save job.')
+      return
+    }
+    mergeIncoming([result.data])
+    setEditing(null)
+  }, [editing, mergeIncoming])
+
   const canSend = Boolean(draft.trim()) && !sending
+  const placeholder = delegateTarget
+    ? `Creating a job for ${crewDisplayName(delegateTarget)}…`
+    : 'Think, draft, or assign work…'
+
+  const transcript = useMemo(() => {
+    const items: Array<{ type: 'day'; key: string; label: string } | { type: 'msg'; key: string; row: ObsidianMessage }> =
+      []
+    let lastDay = ''
+    for (const row of messages) {
+      const day = dateKey(row.created_at)
+      if (day !== lastDay) {
+        lastDay = day
+        items.push({ type: 'day', key: `day-${day}`, label: formatDayLabel(row.created_at) })
+      }
+      items.push({ type: 'msg', key: row.id, row })
+    }
+    return items
+  }, [messages])
 
   if (loading) {
     return (
@@ -151,8 +248,21 @@ export default function ObsidianThreadScreen({ navigation, route }: Props) {
     <KeyboardAvoidingView
       style={styles.screen}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
+      keyboardVerticalOffset={headerHeight}
     >
+      <Pressable
+        onPress={() => {
+          setRenameDraft(threadTitle)
+          setRenameOpen(true)
+        }}
+        style={styles.threadBar}
+      >
+        <Text style={styles.threadBarLabel}>Thread</Text>
+        <Text style={styles.threadBarTitle} numberOfLines={1}>
+          {threadTitle || 'New thread'}
+        </Text>
+      </Pressable>
+
       <ScrollView
         ref={scrollRef}
         style={styles.transcript}
@@ -163,60 +273,142 @@ export default function ObsidianThreadScreen({ navigation, route }: Props) {
         }
       >
         {messages.length === 0 ? (
-          <Text style={styles.empty}>No messages yet. Talk to Obsidian, or pick someone to message directly.</Text>
-        ) : (
-          messages.map((row) => (
-            <View
-              key={row.id}
-              style={[styles.bubble, row.role === 'user' ? styles.bubbleUser : styles.bubbleOther]}
-            >
-              <Text style={[styles.roleLabel, { color: ROLE_COLOR[row.role] }]}>
-                {row.role === 'chatgpt' ? 'Obsidian' : OBSIDIAN_ROLE_LABEL[row.role]}
-                {row.status && row.status !== 'done' ? ` · ${row.status}` : ''}
-              </Text>
-              <Text style={styles.bubbleText}>{row.content}</Text>
-            </View>
-          ))
-        )}
-        {pendingRow ? (
-          <Text style={styles.working}>
-            {pendingRow.role === 'chatgpt' ? 'Obsidian' : OBSIDIAN_ROLE_LABEL[pendingRow.role]} working…
+          <Text style={styles.empty}>
+            Think with Obsidian in this thread. Delegate when you want Ace or the crew to execute.
           </Text>
-        ) : null}
+        ) : (
+          transcript.map((item) => {
+            if (item.type === 'day') {
+              return (
+                <Text key={item.key} style={styles.day}>
+                  {item.label}
+                </Text>
+              )
+            }
+            const row = item.row
+            if (isJobCard(row)) {
+              return (
+                <ObsidianJobCard
+                  key={row.id}
+                  message={row}
+                  assigningId={assigningId}
+                  expanded={Boolean(expandedIds[row.id])}
+                  onToggleExpand={() =>
+                    setExpandedIds((prev) => ({ ...prev, [row.id]: !prev[row.id] }))
+                  }
+                  onAssign={(job) => {
+                    void assignJob(row, job)
+                  }}
+                  onEdit={(job) => setEditing({ messageId: row.id, job })}
+                  onChangeAgent={(job) => {
+                    setEditing({ messageId: row.id, job })
+                    setDelegateOpen(true)
+                  }}
+                  onAskObsidian={(job) => {
+                    setDelegateTarget(null)
+                    setDraft(`Talk through this result from ${crewDisplayName(job.assignedAgentId)}:\n${job.summary || job.objective}`)
+                  }}
+                  onRevise={(job) => {
+                    setDelegateTarget(job.assignedAgentId)
+                    setDraft(`Revise this job: ${job.objective}`)
+                  }}
+                />
+              )
+            }
+            const time = formatClock(row.created_at)
+            if (row.role === 'user') {
+              return (
+                <View key={row.id} style={styles.userWrap}>
+                  <View style={styles.userBubble}>
+                    <Text style={styles.userText}>{row.content}</Text>
+                  </View>
+                </View>
+              )
+            }
+
+            const activity = row.role === 'chatgpt' ? parseActivitySummary(row.content) : null
+            const hideReadyNote = /^Ready to hand this to /i.test(row.content)
+
+            return (
+              <View key={row.id} style={styles.assistantBlock}>
+                <View style={styles.assistantMeta}>
+                  <View style={styles.avatar}>
+                    <Text style={styles.avatarGlyph}>O</Text>
+                  </View>
+                  <Text style={styles.assistantName}>{OBSIDIAN_ROLE_LABEL[row.role]}</Text>
+                  {time ? <Text style={styles.assistantTime}>· {time}</Text> : null}
+                </View>
+                {activity ? (
+                  <ObsidianActivitySummary
+                    summary={activity}
+                    onViewTimeline={() => navigation.navigate('AdminUsers')}
+                    onMonitor={() => setDraft(`Monitor ${activity.title}. Tell me if they start Lesson 1.`)}
+                    onFollowUp={() => setDraft('What should I watch next for this user?')}
+                  />
+                ) : hideReadyNote ? (
+                  <Text style={styles.readyNote}>{row.content}</Text>
+                ) : row.role === 'chatgpt' ? (
+                  <ObsidianMarkdown text={row.content} />
+                ) : (
+                  <Text style={styles.assistantPlain}>{row.content}</Text>
+                )}
+                {row.role === 'chatgpt' && !activity && !hideReadyNote ? (
+                  <View style={styles.msgActions}>
+                    {looksLikeDataQuestion(row.content) ? (
+                      <Pressable style={styles.chipAction} onPress={() => navigation.navigate('AdminAnalytics')}>
+                        <Text style={styles.chipActionText}>View activity</Text>
+                      </Pressable>
+                    ) : (
+                      <Pressable
+                        style={styles.chipAction}
+                        onPress={() => setDraft(`Explore further:\n${row.content.slice(0, 280)}`)}
+                      >
+                        <Text style={styles.chipActionText}>Explore further</Text>
+                      </Pressable>
+                    )}
+                    <Pressable
+                      style={styles.chipAction}
+                      onPress={() => setDraft('Ask a follow-up on the last answer.')}
+                    >
+                      <Text style={styles.chipActionText}>Ask follow-up</Text>
+                    </Pressable>
+                  </View>
+                ) : null}
+              </View>
+            )
+          })
+        )}
+        {sending && !pendingRow ? <Text style={styles.working}>Thinking…</Text> : null}
         {error ? <Text style={styles.errorBanner}>{error}</Text> : null}
       </ScrollView>
 
-      <View style={[styles.composer, { paddingBottom: Math.max(8, Math.min(insets.bottom, 12)) }]}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.routeRow}
-          keyboardShouldPersistTaps="handled"
-        >
-          <Pressable
-            onPress={() => setCrewRoute(null)}
-            style={[styles.routeChip, crewRoute === null && styles.routeChipOn]}
-          >
-            <Text style={[styles.routeChipText, crewRoute === null && styles.routeChipTextOn]}>Obsidian</Text>
-          </Pressable>
-          {OBSIDIAN_CREW_ROUTES.map((routeName) => (
-            <Pressable
-              key={routeName}
-              onPress={() => setCrewRoute((current) => (current === routeName ? null : routeName))}
-              style={[styles.routeChip, crewRoute === routeName && styles.routeChipOn]}
-            >
-              <Text style={[styles.routeChipText, crewRoute === routeName && styles.routeChipTextOn]}>
-                {crewLabel(routeName)}
+      <View style={[styles.composer, { paddingBottom: Math.max(insets.bottom, 10) }]}>
+        {delegateTarget ? (
+          <View style={styles.delegateChipRow}>
+            <View style={[styles.delegateChip, { borderColor: OBSIDIAN_CREW[delegateTarget].color }]}>
+              <Text style={[styles.delegateChipText, { color: OBSIDIAN_CREW[delegateTarget].color }]}>
+                Job for {crewDisplayName(delegateTarget)}
               </Text>
-            </Pressable>
-          ))}
-        </ScrollView>
+              <Pressable onPress={() => setDelegateTarget(null)} accessibilityLabel="Remove agent">
+                <Text style={styles.delegateChipX}>×</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
         <View style={styles.inputBar}>
+          <Pressable
+            style={({ pressed }) => [styles.delegateIconBtn, pressed && styles.pressed]}
+            onPress={() => setDelegateOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Delegate"
+          >
+            <Text style={styles.delegateIcon}>↳</Text>
+          </Pressable>
           <AdminTextInput
             style={styles.input}
             value={draft}
             onChangeText={setDraft}
-            placeholder={`Message ${talkingTo}…`}
+            placeholder={placeholder}
             placeholderTextColor="#6b7280"
             allowMultiline
             editable={!sending}
@@ -232,12 +424,114 @@ export default function ObsidianThreadScreen({ navigation, route }: Props) {
               void send()
             }}
             accessibilityRole="button"
-            accessibilityLabel={`Send to ${talkingTo}`}
+            accessibilityLabel="Send to Obsidian"
           >
-            <Text style={[styles.sendGlyph, !canSend && styles.sendGlyphOff]}>{sending ? '…' : '↑'}</Text>
+            {sending ? (
+              <ActivityIndicator size="small" color="#111111" />
+            ) : (
+              <Text style={[styles.sendGlyph, !canSend && styles.sendGlyphOff]}>↑</Text>
+            )}
           </Pressable>
         </View>
       </View>
+
+      <ObsidianDelegateSheet
+        visible={delegateOpen}
+        onClose={() => setDelegateOpen(false)}
+        onPick={(route) => {
+          if (editing) {
+            setEditing({
+              ...editing,
+              job: { ...editing.job, assignedAgentId: route },
+            })
+            return
+          }
+          setDelegateTarget(route)
+        }}
+      />
+
+      <Modal visible={Boolean(editing) && !delegateOpen} transparent animationType="fade">
+        <Pressable style={styles.editBackdrop} onPress={() => setEditing(null)}>
+          <Pressable style={styles.editSheet} onPress={(e) => e.stopPropagation()}>
+            <Text style={styles.editTitle}>Edit job</Text>
+            <Text style={styles.editLabel}>Objective</Text>
+            <AdminTextInput
+              allowMultiline
+              style={styles.editInput}
+              value={editing?.job.objective ?? ''}
+              onChangeText={(text) =>
+                setEditing((prev) => (prev ? { ...prev, job: { ...prev.job, objective: text } } : prev))
+              }
+            />
+            <Text style={styles.editLabel}>Deliverable</Text>
+            <AdminTextInput
+              allowMultiline
+              style={styles.editInput}
+              value={editing?.job.deliverable ?? ''}
+              onChangeText={(text) =>
+                setEditing((prev) => (prev ? { ...prev, job: { ...prev.job, deliverable: text } } : prev))
+              }
+            />
+            <Text style={styles.editLabel}>Context</Text>
+            <AdminTextInput
+              allowMultiline
+              style={styles.editInput}
+              value={editing?.job.contextSummary ?? ''}
+              onChangeText={(text) =>
+                setEditing((prev) => (prev ? { ...prev, job: { ...prev.job, contextSummary: text } } : prev))
+              }
+            />
+            <View style={styles.editActions}>
+              <Pressable onPress={() => setEditing(null)}>
+                <Text style={styles.cancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={styles.saveBtn}
+                onPress={() => {
+                  void saveEdit()
+                }}
+              >
+                <Text style={styles.saveText}>Save</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+      <Modal visible={renameOpen} transparent animationType="fade" onRequestClose={() => setRenameOpen(false)}>
+        <Pressable style={styles.editBackdrop} onPress={() => setRenameOpen(false)}>
+          <Pressable style={styles.editSheet} onPress={(e) => e.stopPropagation()}>
+            <Text style={styles.editTitle}>Thread title</Text>
+            <AdminTextInput
+              style={styles.editInput}
+              value={renameDraft}
+              onChangeText={setRenameDraft}
+              placeholder="Name this thread"
+              placeholderTextColor="#6b7280"
+            />
+            <View style={styles.editActions}>
+              <Pressable onPress={() => setRenameOpen(false)}>
+                <Text style={styles.cancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={styles.saveBtn}
+                onPress={() => {
+                  void (async () => {
+                    const result = await updateObsidianThreadTitle(threadId, renameDraft)
+                    if (result.error) {
+                      setError(result.error)
+                      return
+                    }
+                    setThreadTitle(renameDraft.trim())
+                    setRenameOpen(false)
+                  })()
+                }}
+              >
+                <Text style={styles.saveText}>Save</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </KeyboardAvoidingView>
   )
 }
@@ -250,119 +544,159 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  threadBar: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#1f1f1f',
+  },
+  threadBarLabel: { color: '#6b7280', fontSize: 11, fontWeight: '700', letterSpacing: 0.7 },
+  threadBarTitle: { color: '#d4d4d8', fontSize: 17, fontWeight: '600', marginTop: 2 },
   transcript: { flex: 1 },
   transcriptContent: {
-    flexGrow: 1,
-    justifyContent: 'flex-end',
-    paddingHorizontal: 12,
-    paddingTop: 8,
-    paddingBottom: 8,
-    gap: 6,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 20,
   },
-  empty: { color: '#6b7280', fontSize: 13, lineHeight: 18, paddingHorizontal: 4 },
-  working: {
-    color: ADMIN_ACCENT_GOLD,
+  empty: { color: '#6b7280', fontSize: 15, lineHeight: 22 },
+  day: {
+    alignSelf: 'center',
+    color: '#6b7280',
     fontSize: 12,
     fontWeight: '600',
-    marginTop: 2,
+    marginVertical: 10,
   },
-  bubble: {
-    borderRadius: 14,
-    paddingHorizontal: 11,
-    paddingVertical: 7,
-    gap: 2,
+  working: {
+    color: ADMIN_ACCENT_GOLD,
+    fontSize: 13,
+    fontWeight: '600',
+    marginTop: 8,
   },
-  bubbleUser: {
+  userWrap: {
+    alignItems: 'flex-end',
+    marginBottom: 18,
+  },
+  userBubble: {
+    maxWidth: '82%',
     backgroundColor: '#1c1c1e',
-    alignSelf: 'flex-end',
-    maxWidth: '86%',
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
   },
-  bubbleOther: {
-    backgroundColor: '#121212',
-    alignSelf: 'flex-start',
-    maxWidth: '86%',
+  userText: {
+    color: '#fafafa',
+    fontSize: 16,
+    lineHeight: 22,
   },
-  roleLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0.2,
+  assistantBlock: {
+    alignSelf: 'stretch',
+    marginBottom: 18,
+    paddingLeft: 10,
+    borderLeftWidth: 2,
+    borderLeftColor: 'rgba(147, 197, 253, 0.45)',
   },
-  bubbleText: {
-    color: '#f3f4f6',
-    fontSize: 15,
-    lineHeight: 20,
+  assistantMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+    gap: 6,
   },
+  avatar: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#1e3a5f',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarGlyph: { color: '#93c5fd', fontSize: 10, fontWeight: '800' },
+  assistantName: { color: '#93c5fd', fontSize: 12, fontWeight: '700' },
+  assistantTime: { color: '#737373', fontSize: 12 },
+  assistantPlain: { color: '#e8e8ea', fontSize: 16, lineHeight: 23 },
+  readyNote: { color: '#a1a1aa', fontSize: 15, lineHeight: 21 },
+  msgActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
+  chipAction: {
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.14)',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  chipActionText: { color: '#f4f4f5', fontSize: 14, fontWeight: '600' },
   errorBanner: {
     color: '#fca5a5',
     backgroundColor: '#450a0a',
     borderRadius: 8,
     padding: 8,
     fontSize: 13,
+    marginTop: 8,
   },
   composer: {
-    paddingHorizontal: 10,
-    paddingTop: 6,
-    gap: 6,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    gap: 8,
     backgroundColor: '#000000',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#1f1f1f',
   },
-  routeRow: {
+  delegateChipRow: { flexDirection: 'row' },
+  delegateChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingRight: 8,
-  },
-  routeChip: {
-    borderRadius: 999,
+    gap: 8,
     borderWidth: 1,
-    borderColor: '#2a2a2a',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    backgroundColor: 'transparent',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
   },
-  routeChipOn: {
-    backgroundColor: 'rgba(212, 164, 55, 0.12)',
-    borderColor: ADMIN_ACCENT_GOLD,
-  },
-  routeChipText: {
-    color: '#8b8b8b',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  routeChipTextOn: {
-    color: ADMIN_ACCENT_GOLD,
-  },
+  delegateChipText: { fontSize: 13, fontWeight: '600' },
+  delegateChipX: { color: '#9ca3af', fontSize: 16, fontWeight: '700' },
   inputBar: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    gap: 6,
-    borderRadius: 20,
+    minHeight: 52,
+    borderRadius: 26,
     borderWidth: 1,
     borderColor: '#2a2a2a',
     backgroundColor: '#161616',
-    paddingLeft: 12,
-    paddingRight: 4,
-    paddingVertical: 3,
+    paddingLeft: 6,
+    paddingRight: 6,
+    paddingVertical: 8,
+    gap: 8,
+  },
+  delegateIconBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  delegateIcon: {
+    color: '#a1a1aa',
+    fontSize: 18,
+    fontWeight: '700',
+    marginTop: -1,
   },
   input: {
     flex: 1,
-    minHeight: 28,
+    minHeight: 22,
     maxHeight: 100,
     borderWidth: 0,
     backgroundColor: 'transparent',
     color: '#ffffff',
     paddingHorizontal: 0,
-    paddingVertical: 6,
-    fontSize: 15,
+    paddingVertical: 4,
+    fontSize: 16,
+    lineHeight: 22,
     textAlignVertical: 'center',
   },
   sendBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: '#e5e7eb',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 1,
   },
   sendBtnOff: {
     backgroundColor: '#2a2a2a',
@@ -377,4 +711,35 @@ const styles = StyleSheet.create({
     color: '#6b7280',
   },
   pressed: { opacity: 0.88 },
+  editBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'flex-end',
+  },
+  editSheet: {
+    backgroundColor: '#111111',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    padding: 16,
+    gap: 8,
+  },
+  editTitle: { color: '#ffffff', fontSize: 17, fontWeight: '700' },
+  editLabel: { color: '#9ca3af', fontSize: 12, fontWeight: '700' },
+  editInput: {
+    minHeight: 48,
+    maxHeight: 90,
+    color: '#ffffff',
+    backgroundColor: '#1c1c1e',
+    borderRadius: 10,
+    padding: 8,
+  },
+  editActions: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 },
+  cancelText: { color: '#9ca3af', fontSize: 15 },
+  saveBtn: {
+    backgroundColor: '#e5e7eb',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  saveText: { color: '#111111', fontWeight: '700' },
 })

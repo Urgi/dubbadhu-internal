@@ -89,7 +89,7 @@ export function buildSectionTiles(
     return [
       {
         title: 'Obsidian',
-        lines: ['Obsidian chat · crew when you pick them'],
+        lines: ['Thinking desk · delegate jobs to the crew'],
         hint: 'Thinking desk with SQL. Ask analytics questions here.',
         route: 'Obsidian',
       },

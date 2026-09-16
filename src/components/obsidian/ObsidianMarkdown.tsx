@@ -1,8 +1,10 @@
 import { StyleSheet, Text, View } from 'react-native'
 
 type Block =
-  | { type: 'heading'; text: string }
+  | { type: 'h1'; text: string }
+  | { type: 'h2'; text: string }
   | { type: 'bullet'; text: string }
+  | { type: 'ordered'; n: number; text: string }
   | { type: 'paragraph'; text: string }
 
 function stripHeadingMarks(line: string): string {
@@ -14,12 +16,19 @@ function parseBlocks(markdown: string): Block[] {
   const lines = markdown.replace(/\r\n/g, '\n').split('\n')
 
   for (const rawLine of lines) {
-    const line = rawLine.trimEnd()
-    const trimmed = line.trim()
+    const trimmed = rawLine.trimEnd().trim()
     if (!trimmed) continue
-
-    if (/^#{1,6}\s+/.test(trimmed)) {
-      blocks.push({ type: 'heading', text: stripHeadingMarks(trimmed) })
+    if (/^#\s+/.test(trimmed)) {
+      blocks.push({ type: 'h1', text: stripHeadingMarks(trimmed) })
+      continue
+    }
+    if (/^#{2,6}\s+/.test(trimmed)) {
+      blocks.push({ type: 'h2', text: stripHeadingMarks(trimmed) })
+      continue
+    }
+    const ordered = trimmed.match(/^(\d+)\.\s+(.+)$/)
+    if (ordered) {
+      blocks.push({ type: 'ordered', n: Number(ordered[1]), text: ordered[2] })
       continue
     }
     if (/^[-*]\s+/.test(trimmed)) {
@@ -31,14 +40,13 @@ function parseBlocks(markdown: string): Block[] {
   return blocks
 }
 
-/** Split on **bold** and `code` spans for inline styling. */
 function renderInline(text: string, keyPrefix: string) {
   const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g).filter(Boolean)
   return parts.map((part, index) => {
     const key = `${keyPrefix}-${index}`
     if (part.startsWith('**') && part.endsWith('**')) {
       return (
-        <Text key={key} style={styles.bold}>
+        <Text key={key} style={styles.strong}>
           {part.slice(2, -2)}
         </Text>
       )
@@ -58,7 +66,7 @@ type Props = {
   text: string
 }
 
-export default function GeminiMarkdownText({ text }: Props) {
+export default function ObsidianMarkdown({ text }: Props) {
   const blocks = parseBlocks(text)
   if (blocks.length === 0) return null
 
@@ -66,23 +74,38 @@ export default function GeminiMarkdownText({ text }: Props) {
     <View style={styles.wrap}>
       {blocks.map((block, index) => {
         const key = `block-${index}`
-        if (block.type === 'heading') {
+        if (block.type === 'h1') {
           return (
-            <Text key={key} style={styles.heading}>
+            <Text key={key} style={styles.h1}>
+              {renderInline(block.text, key)}
+            </Text>
+          )
+        }
+        if (block.type === 'h2') {
+          return (
+            <Text key={key} style={styles.h2}>
               {renderInline(block.text, key)}
             </Text>
           )
         }
         if (block.type === 'bullet') {
           return (
-            <View key={key} style={styles.bulletRow}>
+            <View key={key} style={styles.listItem}>
               <Text style={styles.bulletDot}>•</Text>
               <Text style={styles.body}>{renderInline(block.text, key)}</Text>
             </View>
           )
         }
+        if (block.type === 'ordered') {
+          return (
+            <View key={key} style={styles.listItem}>
+              <Text style={styles.orderedIndex}>{block.n}.</Text>
+              <Text style={styles.body}>{renderInline(block.text, key)}</Text>
+            </View>
+          )
+        }
         return (
-          <Text key={key} style={styles.body}>
+          <Text key={key} style={styles.paragraph}>
             {renderInline(block.text, key)}
           </Text>
         )
@@ -93,39 +116,64 @@ export default function GeminiMarkdownText({ text }: Props) {
 
 const styles = StyleSheet.create({
   wrap: {
-    gap: 8,
-  },
-  heading: {
-    color: '#f3f4f6',
-    fontSize: 15,
-    fontWeight: '700',
-    lineHeight: 22,
-    marginTop: 4,
+    alignSelf: 'stretch',
   },
   body: {
-    color: '#d1d5db',
-    fontSize: 14,
-    lineHeight: 22,
+    flexShrink: 1,
+    color: '#e8e8ea',
+    fontSize: 16,
+    lineHeight: 23,
   },
-  bold: {
-    color: '#f9fafb',
+  paragraph: {
+    color: '#e8e8ea',
+    fontSize: 16,
+    lineHeight: 23,
+    marginTop: 0,
+    marginBottom: 10,
+  },
+  h1: {
+    color: '#ffffff',
+    fontSize: 21,
+    lineHeight: 27,
     fontWeight: '700',
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  h2: {
+    color: '#ffffff',
+    fontSize: 17,
+    lineHeight: 23,
+    fontWeight: '700',
+    marginTop: 14,
+    marginBottom: 6,
+  },
+  strong: {
+    fontWeight: '700',
+    color: '#ffffff',
   },
   code: {
     color: '#fde68a',
     fontFamily: 'Menlo',
     fontSize: 13,
   },
-  bulletRow: {
+  listItem: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 8,
-    paddingLeft: 2,
+    marginTop: 0,
+    marginBottom: 6,
+    paddingRight: 8,
   },
   bulletDot: {
-    color: '#9ca3af',
-    fontSize: 14,
-    lineHeight: 22,
-    width: 12,
+    color: '#a1a1aa',
+    fontSize: 16,
+    lineHeight: 23,
+    width: 16,
+  },
+  orderedIndex: {
+    color: '#a1a1aa',
+    fontSize: 16,
+    lineHeight: 23,
+    width: 22,
+    fontVariant: ['tabular-nums'],
   },
 })

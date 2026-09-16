@@ -13,6 +13,9 @@ type HandoffBody = {
   context?: string
   done_when?: string
   urgency?: string
+  deliverable?: string
+  draft_message_id?: string
+  assign_only?: boolean
 }
 
 Deno.serve(async (req) => {
@@ -35,12 +38,17 @@ Deno.serve(async (req) => {
   }
 
   const threadId = String(body.thread_id ?? '').trim()
-  const content = String(body.content ?? body.message ?? '').trim()
+  const assignOnly = body.assign_only === true
+  const draftMessageId = String(body.draft_message_id ?? '').trim()
+  const content = String(body.content ?? body.message ?? body.goal ?? '').trim()
   if (!isUuid(threadId)) {
     return jsonResponse({ ok: false, error: 'thread_id must be a UUID.' }, 400)
   }
   if (!content) {
-    return jsonResponse({ ok: false, error: 'Message text is required.' }, 400)
+    return jsonResponse({ ok: false, error: 'Message text or goal is required.' }, 400)
+  }
+  if (draftMessageId && !isUuid(draftMessageId)) {
+    return jsonResponse({ ok: false, error: 'draft_message_id must be a UUID.' }, 400)
   }
 
   const requestedRoute = String(body.route ?? 'ace').trim() || 'ace'
@@ -54,7 +62,7 @@ Deno.serve(async (req) => {
 
   const requestedUrgency = String(body.urgency ?? 'normal').trim() || 'normal'
   if (!isUrgency(requestedUrgency)) {
-    return jsonResponse({ ok: false, error: 'urgency must be low | normal | high.' }, 400)
+    return jsonResponse({ ok: false, error: 'urgency must be low | normal | high | urgent.' }, 400)
   }
   const urgency: Urgency = requestedUrgency
 
@@ -67,18 +75,22 @@ Deno.serve(async (req) => {
     return jsonResponse({ ok: false, error: 'Thread not found.' }, 404)
   }
 
-  const userInsert = await db
-    .from('obsidian_messages')
-    .insert({
-      thread_id: threadId,
-      role: 'user',
-      content,
-      status: null,
-    })
-    .select('id, thread_id, role, content, status, created_at')
-    .single()
-  if (userInsert.error || !userInsert.data) {
-    return jsonResponse({ ok: false, error: userInsert.error?.message || 'Failed to insert user message.' }, 500)
+  let userMessage = null as Record<string, unknown> | null
+  if (!assignOnly) {
+    const userInsert = await db
+      .from('obsidian_messages')
+      .insert({
+        thread_id: threadId,
+        role: 'user',
+        content,
+        status: null,
+      })
+      .select('id, thread_id, role, content, status, created_at')
+      .single()
+    if (userInsert.error || !userInsert.data) {
+      return jsonResponse({ ok: false, error: userInsert.error?.message || 'Failed to insert user message.' }, 500)
+    }
+    userMessage = userInsert.data
   }
 
   if (!threadRes.data.title || threadRes.data.title === 'New thread') {
@@ -95,12 +107,14 @@ Deno.serve(async (req) => {
     goal: String(body.goal ?? '').trim(),
     context: String(body.context ?? '').trim(),
     doneWhen: String(body.done_when ?? '').trim(),
+    deliverable: String(body.deliverable ?? '').trim(),
+    existingMessageId: draftMessageId || undefined,
   })
   if (handed instanceof Response) return handed
 
   return jsonResponse({
     ok: true,
-    user_message: userInsert.data,
+    user_message: userMessage,
     pending: handed.pending,
   })
 })

@@ -210,6 +210,7 @@ export default function AdminAnalyticsScreen({ navigation }: Props) {
       )
     }
 
+    const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
     const ev24Res = await supabase.rpc('admin_fetch_analytics_events', {
       p_since: since24h,
       p_limit: 500,

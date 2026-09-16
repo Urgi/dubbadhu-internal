@@ -28,13 +28,13 @@ export type ObsidianMessage = {
 }
 
 export const OBSIDIAN_ROLE_LABEL: Record<ObsidianRole, string> = {
-  user: 'user',
-  chatgpt: 'chatgpt',
-  ace: 'ace',
-  moti: 'moti',
-  jack: 'jack',
-  queen: 'queen',
-  nigus: 'nigus',
+  user: 'You',
+  chatgpt: 'Obsidian',
+  ace: 'Ace',
+  moti: 'Moti',
+  jack: 'Jack',
+  queen: 'Queen',
+  nigus: 'Nigus',
 }
 
 type FnPayload = {
@@ -44,6 +44,7 @@ type FnPayload = {
   reply?: ObsidianMessage
   pending?: ObsidianMessage
   message?: ObsidianMessage
+  job_draft?: ObsidianMessage
 }
 
 async function readInvokeError(
@@ -92,6 +93,11 @@ export async function createObsidianThread(title = 'New thread'): Promise<{
   return { data: data as ObsidianThread, error: null }
 }
 
+export async function deleteObsidianThread(threadId: string): Promise<{ error: string | null }> {
+  const { error } = await supabase.from('obsidian_threads').delete().eq('id', threadId)
+  return { error: error?.message ?? null }
+}
+
 export async function listObsidianMessages(threadId: string): Promise<{
   data: ObsidianMessage[] | null
   error: string | null
@@ -114,16 +120,25 @@ function mergeMessages(existing: ObsidianMessage[], incoming: ObsidianMessage[])
 export async function invokeObsidianChat(input: {
   threadId: string
   content: string
+  draftJob?: boolean
+  route?: ObsidianCrewRoute
 }): Promise<{ ok: true; messages: ObsidianMessage[] } | { ok: false; error: string }> {
   try {
     const { data, error } = await supabase.functions.invoke('obsidian-chat', {
-      body: { thread_id: input.threadId, content: input.content },
+      body: {
+        thread_id: input.threadId,
+        content: input.content,
+        draft_job: input.draftJob === true,
+        route: input.route,
+      },
     })
     const payload = await readInvokeError(error, data)
     if (!payload?.ok) {
       return { ok: false, error: payload?.error || 'obsidian-chat failed' }
     }
-    const messages = [payload.user_message, payload.reply, payload.pending].filter(Boolean) as ObsidianMessage[]
+    const messages = [payload.user_message, payload.reply, payload.pending, payload.job_draft].filter(
+      Boolean,
+    ) as ObsidianMessage[]
     return { ok: true, messages }
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) }
@@ -134,10 +149,26 @@ export async function invokeObsidianHandoff(input: {
   threadId: string
   content: string
   route: ObsidianCrewRoute
+  goal?: string
+  deliverable?: string
+  context?: string
+  urgency?: 'low' | 'normal' | 'high' | 'urgent'
+  draftMessageId?: string
+  assignOnly?: boolean
 }): Promise<{ ok: true; messages: ObsidianMessage[] } | { ok: false; error: string }> {
   try {
     const { data, error } = await supabase.functions.invoke('obsidian-handoff', {
-      body: { thread_id: input.threadId, content: input.content, route: input.route },
+      body: {
+        thread_id: input.threadId,
+        content: input.content,
+        route: input.route,
+        goal: input.goal,
+        deliverable: input.deliverable,
+        context: input.context,
+        urgency: input.urgency,
+        draft_message_id: input.draftMessageId,
+        assign_only: input.assignOnly === true,
+      },
     })
     const payload = await readInvokeError(error, data)
     if (!payload?.ok) {
@@ -203,6 +234,30 @@ export function applyRealtimeMessage(
     return existing.filter((row) => row.id !== message.id)
   }
   return mergeMessages(existing, [message])
+}
+
+export async function updateObsidianThreadTitle(
+  threadId: string,
+  title: string,
+): Promise<{ error: string | null }> {
+  const trimmed = title.trim()
+  if (!trimmed) return { error: 'Title is required.' }
+  const { error } = await supabase.from('obsidian_threads').update({ title: trimmed }).eq('id', threadId)
+  return { error: error?.message ?? null }
+}
+
+export async function updateObsidianMessageContent(
+  messageId: string,
+  content: string,
+): Promise<{ data: ObsidianMessage | null; error: string | null }> {
+  const { data, error } = await supabase
+    .from('obsidian_messages')
+    .update({ content })
+    .eq('id', messageId)
+    .select('id, thread_id, role, content, status, created_at')
+    .single()
+  if (error) return { data: null, error: error.message }
+  return { data: data as ObsidianMessage, error: null }
 }
 
 export { mergeMessages }

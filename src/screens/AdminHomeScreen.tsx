@@ -370,7 +370,7 @@ export default function AdminHomeScreen({ navigation }: Props) {
           <View style={styles.sectionHeaderText}>
             <Text style={styles.sectionTitle}>Obsidian</Text>
             <Text style={styles.sectionSubtitle}>
-              Talk to Obsidian, or pick a teammate to message directly
+              Your thinking desk. Delegate jobs to Ace and the crew without leaving the thread.
             </Text>
           </View>
           <Text style={styles.sectionChevron}>›</Text>

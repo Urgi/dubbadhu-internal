@@ -7,6 +7,7 @@ import {
   isUuid,
   secretEquals,
 } from '../_shared/obsidian.ts'
+import { parseObsidianJob, serializeObsidianJob } from '../_shared/obsidianJob.ts'
 
 type ReplyBody = {
   thread_id?: string
@@ -83,12 +84,60 @@ Deno.serve(async (req) => {
     return jsonResponse({ ok: false, error: 'Thread not found.' }, 404)
   }
 
+  const pendingRes = await db
+    .from('obsidian_messages')
+    .select('id, thread_id, role, content, status, created_at')
+    .eq('thread_id', threadId)
+    .eq('status', 'pending')
+    .eq('role', role)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  const previous = pendingRes.data
+    ? parseObsidianJob(String((pendingRes.data as { content?: string }).content ?? ''))
+    : null
+  const summary = content.trim().split(/\n+/)[0]?.replace(/\s+/g, ' ').slice(0, 220) ?? content.slice(0, 220)
+  const storedContent = previous
+    ? serializeObsidianJob({
+        ...previous,
+        assignedAgentId: isCrewRoute(role) ? role : previous.assignedAgentId,
+        jobStatus: status === 'blocked' ? 'needs_input' : status === 'failed' ? 'failed' : 'completed',
+        summary,
+        result: content,
+        progressNote: undefined,
+      })
+    : content
+
+  if (pendingRes.data?.id) {
+    const updated = await db
+      .from('obsidian_messages')
+      .update({ content: storedContent, status, role })
+      .eq('id', pendingRes.data.id)
+      .select('id, thread_id, role, content, status, created_at')
+      .single()
+    if (updated.error || !updated.data) {
+      return jsonResponse({ ok: false, error: updated.error?.message || 'Failed to update job result.' }, 500)
+    }
+    await db
+      .from('obsidian_messages')
+      .delete()
+      .eq('thread_id', threadId)
+      .eq('status', 'pending')
+      .neq('id', updated.data.id)
+    return jsonResponse({
+      ok: true,
+      message: updated.data,
+      handoff_id: handoffId || null,
+    })
+  }
+
   const insert = await db
     .from('obsidian_messages')
     .insert({
       thread_id: threadId,
       role,
-      content,
+      content: storedContent,
       status,
     })
     .select('id, thread_id, role, content, status, created_at')
