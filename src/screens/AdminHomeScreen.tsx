@@ -370,7 +370,7 @@ export default function AdminHomeScreen({ navigation }: Props) {
           <View style={styles.sectionHeaderText}>
             <Text style={styles.sectionTitle}>Obsidian</Text>
             <Text style={styles.sectionSubtitle}>
-              Multi-turn thinking desk — Ask ChatGPT or hand stack/ops to Ace
+              Talk to Obsidian, or pick a teammate to message directly
             </Text>
           </View>
           <Text style={styles.sectionChevron}>›</Text>

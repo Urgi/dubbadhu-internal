@@ -1,5 +1,5 @@
 /**
- * Accounts excluded from product analytics (admin reads + Gemini).
+ * Accounts excluded from product analytics (admin reads).
  * Keep in sync with Dubbadhu/constants/analyticsExcludedUserIds.js
  *
  * Operator QA (Urji + Test): `users.lessons_completed` is routinely reset to 0

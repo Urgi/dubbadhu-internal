@@ -123,7 +123,7 @@ export async function invokeObsidianChat(input: {
     if (!payload?.ok) {
       return { ok: false, error: payload?.error || 'obsidian-chat failed' }
     }
-    const messages = [payload.user_message, payload.reply].filter(Boolean) as ObsidianMessage[]
+    const messages = [payload.user_message, payload.reply, payload.pending].filter(Boolean) as ObsidianMessage[]
     return { ok: true, messages }
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) }

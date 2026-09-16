@@ -1,19 +1,8 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 import { requireAdmin, requireEnv, isAdminCaller, serviceClient } from '../_shared/admin.ts'
 import { jsonResponse, optionsResponse } from '../_shared/cors.ts'
-import {
-  ACE_WEBHOOK_URL,
-  HISTORY_LIMIT,
-  historyAsContext,
-  isCrewRoute,
-  isUrgency,
-  isUuid,
-  oneSentenceGoal,
-  titleFromMessage,
-  type AceRoute,
-  type ObsidianMessageRow,
-  type Urgency,
-} from '../_shared/obsidian.ts'
+import { isCrewRoute, isUrgency, isUuid, titleFromMessage, type AceRoute, type Urgency } from '../_shared/obsidian.ts'
+import { runCrewHandoff } from '../_shared/runCrewHandoff.ts'
 
 type HandoffBody = {
   thread_id?: string
@@ -96,86 +85,22 @@ Deno.serve(async (req) => {
     await db.from('obsidian_threads').update({ title: titleFromMessage(content) }).eq('id', threadId)
   }
 
-  const historyRes = await db
-    .from('obsidian_messages')
-    .select('id, thread_id, role, content, status, created_at')
-    .eq('thread_id', threadId)
-    .order('created_at', { ascending: false })
-    .limit(HISTORY_LIMIT)
-
-  const history = ([...(historyRes.data ?? [])] as ObsidianMessageRow[]).reverse()
-  const goal = String(body.goal ?? '').trim() || oneSentenceGoal(content)
-  const context = String(body.context ?? '').trim() || historyAsContext(history)
-  const doneWhen =
-    String(body.done_when ?? '').trim() ||
-    `Reply in this Obsidian thread by POSTing JSON to /functions/v1/obsidian-reply with thread_id ${threadId}.`
-
-  const pendingInsert = await db
-    .from('obsidian_messages')
-    .insert({
-      thread_id: threadId,
-      role: route,
-      content: `${route === 'ace' ? 'Ace' : route} working…`,
-      status: 'pending',
-    })
-    .select('id, thread_id, role, content, status, created_at')
-    .single()
-  if (pendingInsert.error || !pendingInsert.data) {
-    return jsonResponse(
-      { ok: false, error: pendingInsert.error?.message || 'Failed to insert Ace working status.' },
-      500,
-    )
-  }
-
-  const payload = {
-    goal,
+  const handed = await runCrewHandoff({
+    db,
+    threadId,
     route,
-    context,
-    done_when: doneWhen,
+    content,
+    webhookKey,
     urgency,
-    thread_id: threadId,
-    source: 'obsidian',
-    reply_channel: 'supabase',
-  }
-
-  try {
-    const aceRes = await fetch(ACE_WEBHOOK_URL, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${webhookKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    })
-    if (!aceRes.ok) {
-      const text = await aceRes.text().catch(() => '')
-      await db
-        .from('obsidian_messages')
-        .update({
-          status: 'failed',
-          content: `Ace webhook failed (HTTP ${aceRes.status}). ${text.slice(0, 280)}`.trim(),
-        })
-        .eq('id', pendingInsert.data.id)
-      return jsonResponse(
-        {
-          ok: false,
-          error: `Ace webhook HTTP ${aceRes.status}${text ? `: ${text.slice(0, 200)}` : ''}`,
-        },
-        502,
-      )
-    }
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Ace webhook request failed.'
-    await db
-      .from('obsidian_messages')
-      .update({ status: 'failed', content: `Ace webhook error: ${message}` })
-      .eq('id', pendingInsert.data.id)
-    return jsonResponse({ ok: false, error: message }, 502)
-  }
+    goal: String(body.goal ?? '').trim(),
+    context: String(body.context ?? '').trim(),
+    doneWhen: String(body.done_when ?? '').trim(),
+  })
+  if (handed instanceof Response) return handed
 
   return jsonResponse({
     ok: true,
     user_message: userInsert.data,
-    pending: pendingInsert.data,
+    pending: handed.pending,
   })
 })

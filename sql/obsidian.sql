@@ -1,6 +1,7 @@
 -- Obsidian MVP — admin thinking desk (threads + messages).
 -- Apply in Supabase → SQL Editor on the Internal project (prod, then staging if used).
--- Apply order: this file only (idempotent). After it succeeds, deploy Edge Functions:
+-- Apply order: this file, then sql/obsidian_sql.sql (read-only SQL plugin).
+-- After SQL succeeds, deploy Edge Functions:
 --   obsidian-chat, obsidian-handoff, obsidian-reply
 -- Then enable Realtime for these tables in Dashboard if the publication block below is skipped.
 --

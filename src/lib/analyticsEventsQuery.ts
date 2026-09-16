@@ -1,5 +1,4 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { ANALYTICS_GEMINI_CONTEXT_EVENT_LIMIT } from './geminiEventInsights'
 import { isAnalyticsExcludedUserId } from './analyticsExcludedUsers'
 
 export type AnalyticsEventRow = {
@@ -10,8 +9,9 @@ export type AnalyticsEventRow = {
   created_at: string
 }
 
-/** PostgREST default max per request; paginate to reach ANALYTICS_GEMINI_CONTEXT_EVENT_LIMIT. */
+/** PostgREST default max per request; paginate when fetching a large window. */
 const FETCH_PAGE_SIZE = 1000
+const ANALYTICS_EVENT_FETCH_LIMIT = 10_000
 
 function normalizeAnalyticsEventRow(raw: Record<string, unknown>): AnalyticsEventRow {
   return {
@@ -25,13 +25,13 @@ function normalizeAnalyticsEventRow(raw: Record<string, unknown>): AnalyticsEven
 
 export type AnalyticsCountryScope = 'all' | 'et' | 'non_et'
 
-/** Newest analytics_events rows for Gemini context (up to limit, paginated when needed). */
+/** Newest analytics_events rows (up to limit, paginated when needed). */
 export async function fetchRecentAnalyticsEventsForGemini(
   client: SupabaseClient,
-  limit = ANALYTICS_GEMINI_CONTEXT_EVENT_LIMIT,
+  limit = ANALYTICS_EVENT_FETCH_LIMIT,
   countryScope: AnalyticsCountryScope = 'all',
 ): Promise<{ data: AnalyticsEventRow[]; error: string | null }> {
-  const cap = Math.max(1, Math.min(limit, ANALYTICS_GEMINI_CONTEXT_EVENT_LIMIT))
+  const cap = Math.max(1, Math.min(limit, ANALYTICS_EVENT_FETCH_LIMIT))
   const rows: AnalyticsEventRow[] = []
   let offset = 0
   /** Extra pages allowed while skipping excluded seed/dev accounts. */

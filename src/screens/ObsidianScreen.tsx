@@ -103,8 +103,7 @@ export default function ObsidianScreen({ navigation }: Props) {
       }
     >
       <Text style={styles.lead}>
-        Thinking desk. Ask ChatGPT in-thread, or hand stack/ops work to Ace. Gemini analytics ask stays
-        on Admin Analytics.
+        Thinking desk. Talk to Obsidian by default — it can query product SQL. Pick a teammate only when you want to message them directly.
       </Text>
       <Pressable
         style={({ pressed }) => [styles.newBtn, pressed && styles.pressed, creating && styles.disabled]}

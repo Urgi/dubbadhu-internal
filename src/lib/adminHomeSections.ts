@@ -89,14 +89,14 @@ export function buildSectionTiles(
     return [
       {
         title: 'Obsidian',
-        lines: ['ChatGPT drafts · Ace / crew handoff'],
-        hint: 'Multi-turn thinking desk. Analytics Gemini ask stays on Analytics.',
+        lines: ['Obsidian chat · crew when you pick them'],
+        hint: 'Thinking desk with SQL. Ask analytics questions here.',
         route: 'Obsidian',
       },
       {
         title: 'Analytics',
         lines: [`Total Users : ${counts.usersTotal ?? '—'}`],
-        hint: 'Dashboards, retention, waitlist, and Gemini Q&A (up to 10k events)',
+        hint: 'Dashboards, retention, waitlist. Ask Obsidian for deeper queries.',
         route: 'AdminAnalytics',
       },
     ]

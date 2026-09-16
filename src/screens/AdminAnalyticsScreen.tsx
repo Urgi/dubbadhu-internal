@@ -1,38 +1,25 @@
 import { useFocusEffect } from '@react-navigation/native'
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native'
 import Svg, { Circle } from 'react-native-svg'
 import type { StackScreenProps } from '@react-navigation/stack'
-import GeminiMarkdownText from '../components/GeminiMarkdownText'
 import SeriesPipelineBlock from '../components/SeriesPipelineBlock'
 import {
   summarizeReliabilityEvents24h,
   type Reliability24hSummary,
   type ReliabilityEventRow,
 } from '../lib/analyticsHealthEvents'
-import {
-  fetchRecentAnalyticsEventsForGemini,
-  type AnalyticsCountryScope,
-} from '../lib/analyticsEventsQuery'
+import { type AnalyticsCountryScope } from '../lib/analyticsEventsQuery'
 import { isAnalyticsExcludedUserId } from '../lib/analyticsExcludedUsers'
-import {
-  ANALYTICS_GEMINI_CONTEXT_EVENT_LIMIT,
-  ANALYTICS_GEMINI_PROMPT_EVENT_LIMIT,
-  runGeminiAnalyticsInsights,
-  runGeminiAnalyticsQuestion,
-} from '../lib/geminiEventInsights'
 import {
   METRIC_TONE_COLOR,
   toneForRegisteredTotal,
@@ -54,14 +41,6 @@ type RetentionRow = {
   d7_retained: number
   d1_retention_percent: number
   d7_retention_percent: number
-}
-
-type AnalyticsEventRow = {
-  id: string
-  user_id: string | null
-  event_name: string
-  properties: Record<string, unknown> | null
-  created_at: string
 }
 
 type RetentionRange = '7d' | '30d' | 'all'
@@ -165,23 +144,11 @@ export default function AdminAnalyticsScreen({ navigation }: Props) {
   const [activeToday, setActiveToday] = useState<number | null>(null)
   const [retention, setRetention] = useState<RetentionRow[]>([])
   const [waitlistByLang, setWaitlistByLang] = useState<{ language: string; count: number }[]>([])
-  const [events, setEvents] = useState<AnalyticsEventRow[]>([])
   const [loadErrors, setLoadErrors] = useState<string[]>([])
-  const [insights, setInsights] = useState('')
-  const [insightsSource, setInsightsSource] = useState('')
-  const [insightsLoading, setInsightsLoading] = useState(false)
-  const [insightsError, setInsightsError] = useState('')
   const [reliability24h, setReliability24h] = useState<Reliability24hSummary | null>(null)
-  const [askQuestion, setAskQuestion] = useState('')
-  const [askAnswer, setAskAnswer] = useState('')
-  const [askSource, setAskSource] = useState('')
-  const [askLoading, setAskLoading] = useState(false)
-  const [askError, setAskError] = useState('')
   const [retentionRange, setRetentionRange] = useState<RetentionRange>('30d')
   const [countryScope, setCountryScope] = useState<CountryScope>('all')
   const [seriesPipeline, setSeriesPipeline] = useState<ProductionSeriesPipeline | null>(null)
-  const scrollRef = useRef<ScrollView>(null)
-  const askSectionY = useRef(0)
 
   const load = useCallback(async () => {
     const errs: string[] = []
@@ -243,11 +210,6 @@ export default function AdminAnalyticsScreen({ navigation }: Props) {
       )
     }
 
-    const evRes = await fetchRecentAnalyticsEventsForGemini(supabase, undefined, scope)
-    if (evRes.error) errs.push(`analytics_events: ${evRes.error}`)
-    else setEvents(evRes.data)
-
-    const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
     const ev24Res = await supabase.rpc('admin_fetch_analytics_events', {
       p_since: since24h,
       p_limit: 500,
@@ -321,57 +283,6 @@ export default function AdminAnalyticsScreen({ navigation }: Props) {
     setRefreshing(false)
   }, [load])
 
-  const onGemini = useCallback(async () => {
-    setInsightsError('')
-    setInsights('')
-    setInsightsSource('')
-    setInsightsLoading(true)
-    try {
-      const out = await runGeminiAnalyticsInsights(events)
-      if (out.ok) {
-        setInsights(out.text)
-        setInsightsSource(out.sourceLabel)
-      } else {
-        setInsightsError(out.error)
-      }
-    } catch (e) {
-      setInsightsError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setInsightsLoading(false)
-    }
-  }, [events])
-
-  const onAskAnalytics = useCallback(async () => {
-    setAskError('')
-    setAskAnswer('')
-    setAskSource('')
-    setAskLoading(true)
-    try {
-      const out = await runGeminiAnalyticsQuestion(events, askQuestion, {
-        reliabilitySummary24h: reliability24h,
-      })
-      if (out.ok) {
-        setAskAnswer(out.text)
-        setAskSource(out.sourceLabel)
-      } else {
-        setAskError(out.error)
-      }
-    } catch (e) {
-      setAskError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setAskLoading(false)
-    }
-  }, [events, askQuestion, reliability24h])
-
-  const scrollAskIntoView = useCallback(() => {
-    setTimeout(() => {
-      scrollRef.current?.scrollTo({
-        y: Math.max(0, askSectionY.current - 16),
-        animated: true,
-      })
-    }, 120)
-  }, [])
-
   const onHealthInfo = useCallback(() => {
     Alert.alert(
       'App health (24h)',
@@ -395,17 +306,10 @@ export default function AdminAnalyticsScreen({ navigation }: Props) {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.screen}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
-    >
     <ScrollView
-      ref={scrollRef}
       style={styles.screen}
       contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled"
-      keyboardDismissMode="on-drag"
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={ORANGE} />}
     >
       {loadErrors.length > 0 ? (
@@ -648,99 +552,27 @@ export default function AdminAnalyticsScreen({ navigation }: Props) {
         )}
       </View>
 
-      <Text style={styles.sectionLabel}>Ask analytics</Text>
-      <View
-        style={styles.card}
-        onLayout={(event) => {
-          askSectionY.current = event.nativeEvent.layout.y
-        }}
-      >
-        <Text style={styles.askHint}>
-          Ask a question; Gemini uses up to {ANALYTICS_GEMINI_PROMPT_EVENT_LIMIT.toLocaleString()} of the newest
-          events loaded below ({events.length.toLocaleString()} now, up to{' '}
-          {ANALYTICS_GEMINI_CONTEXT_EVENT_LIMIT.toLocaleString()}) plus the 24h reliability summary.
-        </Text>
-        <TextInput
-          style={styles.askInput}
-          placeholder="e.g. Any component_error spikes after build 97? Who exited lesson 1 early?"
-          placeholderTextColor="#666"
-          value={askQuestion}
-          onChangeText={setAskQuestion}
-          multiline
-          editable={!askLoading}
-          onFocus={scrollAskIntoView}
-        />
-        <Pressable
-          onPress={() => {
-            void onAskAnalytics()
-          }}
-          disabled={askLoading || !askQuestion.trim()}
-          style={({ pressed }) => [
-            styles.aiBtn,
-            styles.askBtn,
-            pressed && styles.aiBtnPressed,
-            (askLoading || !askQuestion.trim()) && styles.disabled,
-          ]}
-        >
-          <Text style={styles.aiBtnText}>{askLoading ? 'Asking Gemini…' : 'Ask Gemini'}</Text>
-        </Pressable>
-        {askError ? <Text style={styles.errorText}>{askError}</Text> : null}
-        {askAnswer ? (
-          <View style={styles.insightsCardInline}>
-            <Text style={styles.insightsTitle}>Answer</Text>
-            {askSource ? <Text style={styles.insightsMeta}>Source: {askSource}</Text> : null}
-            <GeminiMarkdownText text={askAnswer} />
-          </View>
-        ) : null}
-      </View>
-
-      <Text style={styles.sectionLabel}>AI summary</Text>
       <Pressable
-        onPress={() => {
-          void onGemini()
-        }}
-        disabled={insightsLoading}
-        style={({ pressed }) => [
-          styles.aiBtn,
-          pressed && styles.aiBtnPressed,
-          insightsLoading && styles.disabled,
-        ]}
-        hitSlop={12}
+        style={styles.card}
+        onPress={() => navigation.navigate('Obsidian')}
         accessibilityRole="button"
-        accessibilityState={{ disabled: insightsLoading }}
+        accessibilityLabel="Ask Obsidian"
       >
-        <Text style={styles.aiBtnText}>
-          {insightsLoading
-            ? 'Asking Gemini…'
-            : events.length > 0
-              ? `Gemini: insights on ${events.length.toLocaleString()} events`
-              : 'Gemini: insights (need analytics events)'}
+        <View style={styles.cardHeader}>
+          <Text style={styles.cardTitle}>Ask Obsidian</Text>
+          <Text style={styles.cardChevron}>›</Text>
+        </View>
+        <Text style={styles.muted}>
+          Custom analytics questions run in Obsidian with a read-only SQL lookup.
         </Text>
       </Pressable>
-      <Text style={styles.aiSub}>
-        Newest rows from analytics_events (up to {ANALYTICS_GEMINI_CONTEXT_EVENT_LIMIT.toLocaleString()} when
-        available).
-      </Text>
-      {events.length === 0 ? (
-        <Text style={styles.mutedSmall}>Allow SELECT on analytics_events for the anon key, then pull to refresh.</Text>
-      ) : null}
-
-      {insightsError ? <Text style={styles.errorText}>{insightsError}</Text> : null}
-      {insights ? (
-        <View style={styles.insightsCard}>
-          <Text style={styles.insightsTitle}>Gemini summary</Text>
-          {insightsSource ? <Text style={styles.insightsMeta}>Source: {insightsSource}</Text> : null}
-          <GeminiMarkdownText text={insights} />
-        </View>
-      ) : null}
     </ScrollView>
-    </KeyboardAvoidingView>
   )
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: SCREEN_BG },
-  content: { paddingHorizontal: 14, paddingTop: 4, paddingBottom: 120 },
+  content: { paddingHorizontal: 14, paddingTop: 4, paddingBottom: 40 },
   centered: {
     flex: 1,
     backgroundColor: SCREEN_BG,
@@ -876,20 +708,7 @@ const styles = StyleSheet.create({
   },
   waitlistBar: { height: 4, borderRadius: 2 },
   waitlistSpacer: { height: 8 },
-  aiBtn: {
-    borderRadius: 12,
-    paddingVertical: 13,
-    paddingHorizontal: 16,
-    alignItems: 'center',
-    backgroundColor: PURPLE,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: PURPLE_BAR,
-  },
-  aiBtnPressed: { opacity: 0.92 },
-  aiBtnText: { fontSize: 14, fontWeight: '600', color: '#fff' },
-  aiSub: { fontSize: 10, color: '#888888', marginTop: 6, textAlign: 'center', marginBottom: 8 },
   muted: { color: '#71717a', fontSize: 13, lineHeight: 18 },
-  mutedSmall: { color: '#52525b', fontSize: 12, marginTop: 4, lineHeight: 16 },
   warnBox: {
     backgroundColor: '#422006',
     borderRadius: 12,
@@ -900,28 +719,6 @@ const styles = StyleSheet.create({
   },
   warnTitle: { color: '#fcd34d', fontWeight: '700', marginBottom: 6 },
   warnText: { color: '#fde68a', fontSize: 12, marginBottom: 4 },
-  disabled: { opacity: 0.5 },
-  errorText: { color: '#f87171', fontSize: 14, marginBottom: 12 },
-  insightsCard: {
-    backgroundColor: '#0c1118',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#1e3a5f',
-    padding: 14,
-    marginTop: 12,
-    marginBottom: 24,
-  },
-  insightsTitle: { color: '#93c5fd', fontWeight: '700', marginBottom: 6 },
-  insightsMeta: { color: '#6b7280', fontSize: 12, marginBottom: 10 },
-  insightsBody: { color: '#e5e7eb', fontSize: 14, lineHeight: 22 },
-  insightsCardInline: {
-    backgroundColor: '#0c1118',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#1e3a5f',
-    padding: 14,
-    marginTop: 12,
-  },
   healthOk: { color: '#30d158', fontSize: 14, lineHeight: 20 },
   healthStat: {
     flex: 1,
@@ -960,21 +757,4 @@ const styles = StyleSheet.create({
   healthRecentMeta: { color: '#666', fontSize: 10, marginBottom: 2 },
   healthRecentEvent: { color: '#fff', fontSize: 13, fontWeight: '600' },
   healthRecentDetail: { color: '#a1a1aa', fontSize: 12, marginTop: 2, lineHeight: 16 },
-  askHint: { color: '#888', fontSize: 12, lineHeight: 17, marginBottom: 10 },
-  askInput: {
-    backgroundColor: '#2a2a2a',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#3a3a3c',
-    color: '#ffffff',
-    fontSize: 15,
-    lineHeight: 22,
-    minHeight: 96,
-    maxHeight: 160,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    textAlignVertical: 'top',
-    marginBottom: 10,
-  },
-  askBtn: { marginTop: 0 },
 })
