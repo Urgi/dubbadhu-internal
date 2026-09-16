@@ -362,6 +362,21 @@ export default function AdminHomeScreen({ navigation }: Props) {
       ) : null}
       {error ? <Text style={styles.errorBanner}>{error}</Text> : null}
 
+      <Pressable
+        style={({ pressed }) => [styles.sectionCard, pressed && styles.sectionCardPressed]}
+        onPress={() => navigation.navigate('Obsidian')}
+      >
+        <View style={styles.sectionHeaderRow}>
+          <View style={styles.sectionHeaderText}>
+            <Text style={styles.sectionTitle}>Obsidian</Text>
+            <Text style={styles.sectionSubtitle}>
+              Multi-turn thinking desk — Ask ChatGPT or hand stack/ops to Ace
+            </Text>
+          </View>
+          <Text style={styles.sectionChevron}>›</Text>
+        </View>
+      </Pressable>
+
       {HOME_SECTION_ORDER.map((section) => (
         <SectionCard
           key={section}

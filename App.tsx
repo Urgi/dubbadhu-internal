@@ -9,6 +9,8 @@ import ProfessorHomeScreen from './src/screens/ProfessorHomeScreen'
 import AdminHomeScreen from './src/screens/AdminHomeScreen'
 import AdminHubSectionScreen from './src/screens/AdminHubSectionScreen'
 import AdminAnalyticsScreen from './src/screens/AdminAnalyticsScreen'
+import ObsidianScreen from './src/screens/ObsidianScreen'
+import ObsidianThreadScreen from './src/screens/ObsidianThreadScreen'
 import AdminFreeAccessScreen from './src/screens/AdminFreeAccessScreen'
 import AdminFidelBetaScreen from './src/screens/AdminFidelBetaScreen'
 import AdminSpeakQaScreen from './src/screens/AdminSpeakQaScreen'
@@ -105,6 +107,8 @@ function AppStack() {
           })}
         />
         <Stack.Screen name="AdminAnalytics" component={AdminAnalyticsScreen} />
+        <Stack.Screen name="Obsidian" component={ObsidianScreen} options={{ title: 'Obsidian' }} />
+        <Stack.Screen name="ObsidianThread" component={ObsidianThreadScreen} />
         <Stack.Screen
           name="AdminUsers"
           component={AdminUsersScreen}

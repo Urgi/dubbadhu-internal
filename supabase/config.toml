@@ -1,0 +1,13 @@
+# Function JWT settings for the existing Dubbadhu Internal Supabase project.
+# Deploy with: supabase functions deploy obsidian-chat obsidian-handoff obsidian-reply
+# Do not put API keys here.
+
+[functions.obsidian-chat]
+verify_jwt = true
+
+[functions.obsidian-handoff]
+verify_jwt = true
+
+# Ace POSTs here with ACE_OBSIDIAN_REPLY_KEY (not a Supabase user JWT).
+[functions.obsidian-reply]
+verify_jwt = false

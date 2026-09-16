@@ -21,6 +21,7 @@ export type HubTileConfig = {
   hint: string
   route:
     | 'AdminAnalytics'
+    | 'Obsidian'
     | 'AdminFreeAccess'
     | 'AdminFidelBeta'
     | 'AdminSpeakQa'
@@ -86,6 +87,12 @@ export function buildSectionTiles(
 ): HubTileConfig[] {
   if (section === 'analytics') {
     return [
+      {
+        title: 'Obsidian',
+        lines: ['ChatGPT drafts · Ace / crew handoff'],
+        hint: 'Multi-turn thinking desk. Analytics Gemini ask stays on Analytics.',
+        route: 'Obsidian',
+      },
       {
         title: 'Analytics',
         lines: [`Total Users : ${counts.usersTotal ?? '—'}`],
