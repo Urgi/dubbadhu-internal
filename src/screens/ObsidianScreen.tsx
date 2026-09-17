@@ -1,7 +1,6 @@
 import { useCallback, useLayoutEffect, useState } from 'react'
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -11,10 +10,9 @@ import {
 } from 'react-native'
 import { useFocusEffect } from '@react-navigation/native'
 import type { StackScreenProps } from '@react-navigation/stack'
-import { createObsidianThread, deleteObsidianThread, listObsidianThreads, type ObsidianThread } from '../lib/obsidian'
+import { ADMIN_ACCENT_GOLD } from '../components/lesson-config/AdminLessonConfigChrome'
+import { createObsidianThread, listObsidianThreads, type ObsidianThread } from '../lib/obsidian'
 import type { RootStackParamList } from '../types'
-
-const ACCENT_BLUE = '#0ea5e9'
 
 type Props = StackScreenProps<RootStackParamList, 'Obsidian'>
 
@@ -88,30 +86,10 @@ export default function ObsidianScreen({ navigation }: Props) {
     navigation.navigate('ObsidianThread', { threadId: result.data.id, title: result.data.title })
   }, [creating, navigation])
 
-  const onDeleteThread = useCallback((thread: ObsidianThread) => {
-    Alert.alert('Delete this chat?', thread.title?.trim() || 'New thread', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: () => {
-          void (async () => {
-            const { error: err } = await deleteObsidianThread(thread.id)
-            if (err) {
-              setError(err)
-              return
-            }
-            setThreads((prev) => prev.filter((row) => row.id !== thread.id))
-          })()
-        },
-      },
-    ])
-  }, [])
-
   if (loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color={ACCENT_BLUE} />
+        <ActivityIndicator size="large" color={ADMIN_ACCENT_GOLD} />
       </View>
     )
   }
@@ -121,7 +99,7 @@ export default function ObsidianScreen({ navigation }: Props) {
       style={styles.screen}
       contentContainerStyle={styles.content}
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={ACCENT_BLUE} />
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={ADMIN_ACCENT_GOLD} />
       }
     >
       <Text style={styles.lead}>
@@ -147,8 +125,6 @@ export default function ObsidianScreen({ navigation }: Props) {
             onPress={() =>
               navigation.navigate('ObsidianThread', { threadId: thread.id, title: thread.title })
             }
-            onLongPress={() => onDeleteThread(thread)}
-            delayLongPress={350}
           >
             <Text style={styles.rowTitle} numberOfLines={2}>
               {thread.title || 'New thread'}
@@ -177,13 +153,13 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   newBtn: {
-    backgroundColor: ACCENT_BLUE,
+    backgroundColor: ADMIN_ACCENT_GOLD,
     borderRadius: 12,
     paddingVertical: 12,
     alignItems: 'center',
   },
   newBtnText: {
-    color: '#ffffff',
+    color: '#111111',
     fontSize: 15,
     fontWeight: '700',
   },

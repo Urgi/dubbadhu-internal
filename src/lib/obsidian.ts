@@ -93,11 +93,6 @@ export async function createObsidianThread(title = 'New thread'): Promise<{
   return { data: data as ObsidianThread, error: null }
 }
 
-export async function deleteObsidianThread(threadId: string): Promise<{ error: string | null }> {
-  const { error } = await supabase.from('obsidian_threads').delete().eq('id', threadId)
-  return { error: error?.message ?? null }
-}
-
 export async function listObsidianMessages(threadId: string): Promise<{
   data: ObsidianMessage[] | null
   error: string | null
