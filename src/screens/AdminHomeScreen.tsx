@@ -3,6 +3,7 @@ import { useFocusEffect } from '@react-navigation/native'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import type { StackScreenProps } from '@react-navigation/stack'
+import InternalLogoFooter from '../components/InternalLogoFooter'
 import { ADMIN_ACCENT_GOLD } from '../components/lesson-config/AdminLessonConfigChrome'
 import SeriesPipelineBlock from '../components/SeriesPipelineBlock'
 import { useAuth } from '../context/AuthContext'
@@ -394,6 +395,7 @@ export default function AdminHomeScreen({ navigation }: Props) {
           }}
         />
       ))}
+      <InternalLogoFooter />
     </ScrollView>
   )
 }
@@ -404,8 +406,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#000000',
   },
   content: {
+    flexGrow: 1,
     padding: 20,
-    paddingBottom: 40,
+    paddingBottom: 24,
     gap: 12,
   },
   centered: {
