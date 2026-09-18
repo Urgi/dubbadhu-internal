@@ -43,6 +43,8 @@ export type RootStackParamList = {
   Obsidian: undefined
   ObsidianThread: { threadId: string; title?: string }
   AdminAnalytics: undefined
+  /** Known learner A/B tests (flags on app_config + analytics_events results). */
+  AdminExperiments: undefined
   /** Registered learners list, or active-today (max 10) when mode is set. */
   AdminUsers:
     | { mode?: 'activeToday'; countryScope?: 'all' | 'et' | 'non_et' }

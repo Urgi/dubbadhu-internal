@@ -21,6 +21,7 @@ export type HubTileConfig = {
   hint: string
   route:
     | 'AdminAnalytics'
+    | 'AdminExperiments'
     | 'Obsidian'
     | 'AdminFreeAccess'
     | 'AdminFidelBeta'
@@ -98,6 +99,12 @@ export function buildSectionTiles(
         lines: [`Total Users : ${counts.usersTotal ?? '—'}`],
         hint: 'Dashboards, retention, waitlist. Ask Obsidian for deeper queries.',
         route: 'AdminAnalytics',
+      },
+      {
+        title: 'Experiments',
+        lines: ['A/B flags · hypotheses · results by arm'],
+        hint: 'Toggle known learner experiments. Requires a binary that reads the flag.',
+        route: 'AdminExperiments',
       },
     ]
   }

@@ -378,21 +378,40 @@ export default function AdminHomeScreen({ navigation }: Props) {
       </Pressable>
 
       {HOME_SECTION_ORDER.map((section) => (
-        <SectionCard
-          key={section}
-          section={section}
-          counts={counts}
-          usersThisWeek={usersThisWeek}
-          funnel={funnel}
-          seriesPipeline={seriesPipeline}
-          onPress={() => {
-            if (section === 'analytics') {
-              navigation.navigate('AdminAnalytics')
-              return
-            }
-            navigation.navigate('AdminHubSection', { section })
-          }}
-        />
+        <View key={section} style={section === 'analytics' ? styles.analyticsHomeStack : undefined}>
+          <SectionCard
+            section={section}
+            counts={counts}
+            usersThisWeek={usersThisWeek}
+            funnel={funnel}
+            seriesPipeline={seriesPipeline}
+            onPress={() => {
+              if (section === 'analytics') {
+                navigation.navigate('AdminAnalytics')
+                return
+              }
+              navigation.navigate('AdminHubSection', { section })
+            }}
+          />
+          {section === 'analytics' ? (
+            <Pressable
+              style={({ pressed }) => [styles.sectionCard, pressed && styles.sectionCardPressed]}
+              onPress={() => navigation.navigate('AdminExperiments')}
+              accessibilityRole="button"
+              accessibilityLabel="Open Experiments"
+            >
+              <View style={styles.sectionHeaderRow}>
+                <View style={styles.sectionHeaderText}>
+                  <Text style={styles.sectionTitle}>Experiments</Text>
+                  <Text style={styles.sectionSubtitle}>
+                    Known A/B tests — flags, hypotheses, and results by arm
+                  </Text>
+                </View>
+                <Text style={styles.sectionChevron}>›</Text>
+              </View>
+            </Pressable>
+          ) : null}
+        </View>
       ))}
     </ScrollView>
   )
@@ -443,6 +462,9 @@ const styles = StyleSheet.create({
   },
   sectionCardPressed: {
     opacity: 0.9,
+  },
+  analyticsHomeStack: {
+    gap: 12,
   },
   sectionHeaderRow: {
     flexDirection: 'row',

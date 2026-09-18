@@ -555,6 +555,21 @@ export default function AdminAnalyticsScreen({ navigation }: Props) {
 
       <Pressable
         style={styles.card}
+        onPress={() => navigation.navigate('AdminExperiments')}
+        accessibilityRole="button"
+        accessibilityLabel="Open Experiments"
+      >
+        <View style={styles.cardHeader}>
+          <Text style={styles.cardTitle}>Experiments</Text>
+          <Text style={styles.cardChevron}>›</Text>
+        </View>
+        <Text style={styles.muted}>
+          Known A/B tests — flags on app_config, results from analytics_events.
+        </Text>
+      </Pressable>
+
+      <Pressable
+        style={styles.card}
         onPress={() => navigation.navigate('Obsidian')}
         accessibilityRole="button"
         accessibilityLabel="Ask Obsidian"
