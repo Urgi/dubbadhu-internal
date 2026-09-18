@@ -1,0 +1,368 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
+import { isAnalyticsExcludedUserId } from './analyticsExcludedUsers'
+import { APP_CONFIG_ROW_ID, type KnownExperiment } from './experiments'
+
+export type ExperimentDateRange = '7d' | '30d' | 'all'
+
+export type ExperimentEventRow = {
+  user_id: string | null
+  event_name: string
+  properties: Record<string, unknown> | null
+  created_at: string
+}
+
+export type ExperimentArmStats = {
+  arm: string
+  label: string
+  exposures: number
+  uniqueUsers: number
+  activationComplete: number
+  paywallViewed: number
+  premiumPurchased: number
+}
+
+export type ExperimentResults = {
+  range: ExperimentDateRange
+  sinceIso: string | null
+  untilIso: string
+  exposureEventName: string
+  sawActivationEvent: boolean
+  sawPaywallEvent: boolean
+  sawPremiumEvent: boolean
+  totalExposures: number
+  totalUniqueUsers: number
+  arms: ExperimentArmStats[]
+  truncated: boolean
+}
+
+const FETCH_PAGE_SIZE = 1000
+const FETCH_CAP = 20_000
+
+/** Verified in prod: learner emits `experiment_exposed`. Accept the alias if it appears. */
+export const EXPERIMENT_EXPOSURE_EVENT_NAMES = ['experiment_exposed', 'experiment_exposure'] as const
+
+const FUNNEL_EVENT_NAMES = ['activation_complete', 'paywall_viewed', 'premium_purchased'] as const
+
+const FETCH_EVENT_NAMES = [...EXPERIMENT_EXPOSURE_EVENT_NAMES, ...FUNNEL_EVENT_NAMES]
+
+const EXPOSURE_NAME_SET = new Set<string>(EXPERIMENT_EXPOSURE_EVENT_NAMES)
+
+export function sinceIsoForRange(range: ExperimentDateRange, nowMs = Date.now()): string | null {
+  if (range === 'all') return null
+  const days = range === '7d' ? 7 : 30
+  return new Date(nowMs - days * 86400000).toISOString()
+}
+
+function strProp(properties: Record<string, unknown> | null, ...keys: string[]): string {
+  if (!properties) return ''
+  for (const key of keys) {
+    const value = properties[key]
+    if (typeof value === 'string' && value.trim()) return value.trim()
+  }
+  return ''
+}
+
+export function isExposureEvent(eventName: string): boolean {
+  return EXPOSURE_NAME_SET.has(String(eventName || '').trim())
+}
+
+export function eventExperimentKey(properties: Record<string, unknown> | null): string {
+  return strProp(properties, 'experiment_key', 'experiment_id')
+}
+
+export function eventArm(properties: Record<string, unknown> | null): string {
+  return strProp(properties, 'arm', 'variant', 'bucket')
+}
+
+export function emptyResults(
+  experiment: KnownExperiment,
+  range: ExperimentDateRange,
+  nowMs = Date.now(),
+): ExperimentResults {
+  return {
+    range,
+    sinceIso: sinceIsoForRange(range, nowMs),
+    untilIso: new Date(nowMs).toISOString(),
+    exposureEventName: 'experiment_exposed',
+    sawActivationEvent: false,
+    sawPaywallEvent: false,
+    sawPremiumEvent: false,
+    totalExposures: 0,
+    totalUniqueUsers: 0,
+    arms: experiment.arms.map((arm) => ({
+      arm: arm.id,
+      label: arm.label,
+      exposures: 0,
+      uniqueUsers: 0,
+      activationComplete: 0,
+      paywallViewed: 0,
+      premiumPurchased: 0,
+    })),
+    truncated: false,
+  }
+}
+
+function rateEligible(count: number, uniqueUsers: number): string {
+  if (uniqueUsers <= 0) return '—'
+  const pct = (count / uniqueUsers) * 100
+  return `${count} / ${uniqueUsers} (${pct.toFixed(0)}%)`
+}
+
+export function formatArmRate(
+  stats: ExperimentArmStats,
+  kind: 'activation' | 'paywall' | 'premium',
+): string {
+  const count =
+    kind === 'activation'
+      ? stats.activationComplete
+      : kind === 'paywall'
+        ? stats.paywallViewed
+        : stats.premiumPurchased
+  return rateEligible(count, stats.uniqueUsers)
+}
+
+/**
+ * First exposure in-window assigns the arm (sticky). Funnel events after that
+ * timestamp count toward the arm. Unknown arms still appear so we don't hide data.
+ */
+export function aggregateExperimentResults(
+  experiment: KnownExperiment,
+  rows: ExperimentEventRow[],
+  excludedUserIds: Set<string>,
+  range: ExperimentDateRange,
+  nowMs = Date.now(),
+  truncated = false,
+): ExperimentResults {
+  const result = emptyResults(experiment, range, nowMs)
+  const labelByArm = new Map(experiment.arms.map((a) => [a.id, a.label]))
+  const statsByArm = new Map(result.arms.map((a) => [a.arm, a]))
+
+  const sorted = [...rows].sort((a, b) => {
+    const at = a.created_at || ''
+    const bt = b.created_at || ''
+    if (at !== bt) return at < bt ? -1 : 1
+    return String(a.event_name).localeCompare(String(b.event_name))
+  })
+
+  const assignment = new Map<string, { arm: string; exposedAt: string }>()
+  let exposureName = 'experiment_exposed'
+
+  for (const row of sorted) {
+    const uid = row.user_id == null ? '' : String(row.user_id)
+    if (!uid || excludedUserIds.has(uid) || isAnalyticsExcludedUserId(uid)) continue
+    if (!isExposureEvent(row.event_name)) continue
+    if (eventExperimentKey(row.properties) !== experiment.key) continue
+    const arm = eventArm(row.properties)
+    if (!arm) continue
+    if (row.event_name === 'experiment_exposed') exposureName = 'experiment_exposed'
+    else if (exposureName !== 'experiment_exposed') exposureName = row.event_name
+
+    const existing = assignment.get(uid)
+    const assignedArm = existing?.arm ?? arm
+    let stats = statsByArm.get(assignedArm)
+    if (!stats) {
+      stats = {
+        arm: assignedArm,
+        label: labelByArm.get(assignedArm) ?? assignedArm,
+        exposures: 0,
+        uniqueUsers: 0,
+        activationComplete: 0,
+        paywallViewed: 0,
+        premiumPurchased: 0,
+      }
+      statsByArm.set(assignedArm, stats)
+    }
+    stats.exposures += 1
+    result.totalExposures += 1
+    if (!existing) {
+      assignment.set(uid, { arm, exposedAt: row.created_at })
+      stats.uniqueUsers += 1
+      result.totalUniqueUsers += 1
+    }
+  }
+
+  const activated = new Set<string>()
+  const paywalled = new Set<string>()
+  const purchased = new Set<string>()
+
+  for (const row of sorted) {
+    const uid = row.user_id == null ? '' : String(row.user_id)
+    if (!uid) continue
+    const assigned = assignment.get(uid)
+    if (!assigned) continue
+    if (row.created_at && assigned.exposedAt && row.created_at < assigned.exposedAt) continue
+    const stats = statsByArm.get(assigned.arm)
+    if (!stats) continue
+    if (row.event_name === 'activation_complete') {
+      result.sawActivationEvent = true
+      if (!activated.has(uid)) {
+        activated.add(uid)
+        stats.activationComplete += 1
+      }
+    } else if (row.event_name === 'paywall_viewed') {
+      result.sawPaywallEvent = true
+      if (!paywalled.has(uid)) {
+        paywalled.add(uid)
+        stats.paywallViewed += 1
+      }
+    } else if (row.event_name === 'premium_purchased') {
+      result.sawPremiumEvent = true
+      if (!purchased.has(uid)) {
+        purchased.add(uid)
+        stats.premiumPurchased += 1
+      }
+    }
+  }
+
+  const knownOrder = experiment.arms.map((a) => a.id)
+  const extra = [...statsByArm.keys()].filter((id) => !knownOrder.includes(id)).sort()
+  result.arms = [...knownOrder, ...extra].map((id) => statsByArm.get(id)!).filter(Boolean)
+  result.exposureEventName = exposureName
+  result.truncated = truncated
+  return result
+}
+
+async function fetchDbExcludedUserIds(client: SupabaseClient): Promise<Set<string>> {
+  const ids = new Set<string>()
+  let offset = 0
+  while (offset < FETCH_CAP) {
+    const { data, error } = await client
+      .from('users')
+      .select('id')
+      .eq('exclude_from_analytics', true)
+      .range(offset, offset + FETCH_PAGE_SIZE - 1)
+    if (error) {
+      // Column / RLS not joinable — caller still applies the hardcoded Internal exclude list.
+      return ids
+    }
+    const batch = (data ?? []) as Array<{ id: string }>
+    for (const row of batch) {
+      if (row?.id) ids.add(String(row.id))
+    }
+    if (batch.length < FETCH_PAGE_SIZE) break
+    offset += batch.length
+  }
+  return ids
+}
+
+function normalizeEventRow(raw: Record<string, unknown>): ExperimentEventRow {
+  return {
+    user_id: raw.user_id == null ? null : String(raw.user_id),
+    event_name: String(raw.event_name ?? ''),
+    properties: (raw.properties as Record<string, unknown> | null) ?? null,
+    created_at: String(raw.created_at ?? ''),
+  }
+}
+
+async function fetchEventsDirect(
+  client: SupabaseClient,
+  sinceIso: string | null,
+): Promise<{ data: ExperimentEventRow[]; error: string | null; truncated: boolean }> {
+  const rows: ExperimentEventRow[] = []
+  let offset = 0
+  while (offset < FETCH_CAP) {
+    let query = client
+      .from('analytics_events')
+      .select('user_id, event_name, properties, created_at')
+      .in('event_name', FETCH_EVENT_NAMES)
+      .order('created_at', { ascending: true })
+      .range(offset, offset + FETCH_PAGE_SIZE - 1)
+    if (sinceIso) query = query.gte('created_at', sinceIso)
+    const { data, error } = await query
+    if (error) return { data: rows, error: error.message, truncated: false }
+    const batch = ((data ?? []) as Record<string, unknown>[]).map(normalizeEventRow)
+    rows.push(...batch)
+    if (batch.length < FETCH_PAGE_SIZE) return { data: rows, error: null, truncated: false }
+    offset += batch.length
+  }
+  return { data: rows, error: null, truncated: true }
+}
+
+async function fetchEventsViaAdminRpc(
+  client: SupabaseClient,
+  sinceIso: string | null,
+): Promise<{ data: ExperimentEventRow[]; error: string | null; truncated: boolean }> {
+  const rows: ExperimentEventRow[] = []
+  let offset = 0
+  const wanted = new Set<string>(FETCH_EVENT_NAMES)
+  while (offset < FETCH_CAP) {
+    const { data, error } = await client.rpc('admin_fetch_analytics_events', {
+      p_since: sinceIso,
+      p_limit: FETCH_PAGE_SIZE,
+      p_offset: offset,
+    })
+    if (error) return { data: rows, error: error.message, truncated: false }
+    const batch = ((data ?? []) as Record<string, unknown>[]).map(normalizeEventRow)
+    if (batch.length === 0) break
+    for (const row of batch) {
+      if (wanted.has(row.event_name)) rows.push(row)
+    }
+    if (batch.length < FETCH_PAGE_SIZE) {
+      return { data: rows, error: null, truncated: false }
+    }
+    offset += batch.length
+  }
+  return { data: rows, error: null, truncated: offset >= FETCH_CAP }
+}
+
+export async function fetchExperimentResults(
+  client: SupabaseClient,
+  experiment: KnownExperiment,
+  range: ExperimentDateRange,
+): Promise<{ data: ExperimentResults; error: string | null }> {
+  const nowMs = Date.now()
+  const sinceIso = sinceIsoForRange(range, nowMs)
+  const excluded = await fetchDbExcludedUserIds(client)
+
+  const direct = await fetchEventsDirect(client, sinceIso)
+  const fetched = direct.error ? await fetchEventsViaAdminRpc(client, sinceIso) : direct
+  if (fetched.error && fetched.data.length === 0) {
+    return { data: emptyResults(experiment, range, nowMs), error: fetched.error }
+  }
+
+  return {
+    data: aggregateExperimentResults(
+      experiment,
+      fetched.data,
+      excluded,
+      range,
+      nowMs,
+      fetched.truncated,
+    ),
+    error: fetched.error,
+  }
+}
+
+export async function fetchExperimentFlag(
+  client: SupabaseClient,
+  flagColumn: KnownExperiment['flagColumn'],
+): Promise<{ enabled: boolean; updatedAt: string | null; error: string | null }> {
+  const { data, error } = await client
+    .from('app_config')
+    .select(`${flagColumn}, updated_at`)
+    .eq('id', APP_CONFIG_ROW_ID)
+    .maybeSingle()
+  if (error) return { enabled: false, updatedAt: null, error: error.message }
+  const row = data as Record<string, unknown> | null
+  return {
+    enabled: Boolean(row?.[flagColumn]),
+    updatedAt: row?.updated_at ? String(row.updated_at) : null,
+    error: null,
+  }
+}
+
+/** Upsert only `id` + the experiment flag so other app_config fields are not clobbered. */
+export async function upsertExperimentFlag(
+  client: SupabaseClient,
+  flagColumn: KnownExperiment['flagColumn'],
+  enabled: boolean,
+): Promise<{ error: string | null }> {
+  const { error } = await client.from('app_config').upsert(
+    {
+      id: APP_CONFIG_ROW_ID,
+      [flagColumn]: enabled,
+    },
+    { onConflict: 'id' },
+  )
+  return { error: error?.message ?? null }
+}
