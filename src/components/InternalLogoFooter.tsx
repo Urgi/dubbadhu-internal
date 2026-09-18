@@ -17,7 +17,7 @@ export default function InternalLogoFooter() {
       pointerEvents="none"
       accessible={false}
       importantForAccessibility="no"
-      style={[styles.wrap, { paddingBottom: Math.max(insets.bottom, 16) }]}
+      style={[styles.wrap, { paddingBottom: Math.max(insets.bottom, 24) }]}
     >
       <Image source={LOGO} style={styles.logo} resizeMode="contain" />
     </View>
