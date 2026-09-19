@@ -2,6 +2,11 @@ import Constants from 'expo-constants'
 
 type Extra = Record<string, unknown> | undefined
 
+function extraBag(): Extra {
+  const c = Constants as { expoConfig?: { extra?: Extra }; manifest?: { extra?: Extra } }
+  return c.expoConfig?.extra || c.manifest?.extra
+}
+
 function fromExtra(extra: Extra, key: string): string {
   const v = extra?.[key]
   return typeof v === 'string' ? v : ''
@@ -14,7 +19,7 @@ function fromExtra(extra: Extra, key: string): string {
 export function getExpoPublicSupabaseUrl(): string {
   return (
     process.env.EXPO_PUBLIC_SUPABASE_URL ||
-    fromExtra(Constants.expoConfig?.extra as Extra, 'EXPO_PUBLIC_SUPABASE_URL') ||
+    fromExtra(extraBag(), 'EXPO_PUBLIC_SUPABASE_URL') ||
     process.env.SUPABASE_URL ||
     ''
   )
@@ -23,7 +28,7 @@ export function getExpoPublicSupabaseUrl(): string {
 export function getExpoPublicSupabaseAnonKey(): string {
   return (
     process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ||
-    fromExtra(Constants.expoConfig?.extra as Extra, 'EXPO_PUBLIC_SUPABASE_ANON_KEY') ||
+    fromExtra(extraBag(), 'EXPO_PUBLIC_SUPABASE_ANON_KEY') ||
     process.env.SUPABASE_ANON_KEY ||
     ''
   )
@@ -34,9 +39,11 @@ export function getExpoPublicSupabaseAnonKey(): string {
  * Prefer EAS secret / .env SUPABASE_SERVICE_ROLE_KEY (not EXPO_PUBLIC_*).
  */
 export function getSupabaseServiceRoleKey(): string {
-  const extra = Constants.expoConfig?.extra as Extra
+  const extra = extraBag()
   return (
+    process.env.EXPO_PUBLIC_SUPABASE_SERVICE_ROLE_KEY ||
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    fromExtra(extra, 'EXPO_PUBLIC_SUPABASE_SERVICE_ROLE_KEY') ||
     fromExtra(extra, 'SUPABASE_SERVICE_ROLE_KEY') ||
     ''
   )
