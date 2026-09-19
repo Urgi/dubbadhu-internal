@@ -19,26 +19,17 @@ export type KnownExperiment = {
   /** Single `app_config` boolean this screen may upsert. */
   flagColumn: typeof PAYWALL_FREE_N_FLAG_COLUMN
   arms: ExperimentArm[]
-  hypothesis: string
-  guardrail: string
-  /** Shown on the card — flag is a no-op without a learner build that reads it. */
-  requiresLearnerBinaryNote: string
 }
 
+/** L1 vs L1+L2 free Speak. Kill if treatment premium or paywall_viewed collapses. */
 export const PAYWALL_FREE_N_V1: KnownExperiment = {
   key: 'paywall_free_n_v1',
   title: 'Speak paywall · free N',
   flagColumn: PAYWALL_FREE_N_FLAG_COLUMN,
   arms: [
-    { id: 'control_l1_free', label: 'Control · L1 free, then paywall' },
-    { id: 'exp_free_l1_l2', label: 'Treatment · L1+L2 free, then paywall' },
+    { id: 'control_l1_free', label: 'L1 free, then paywall' },
+    { id: 'exp_free_l1_l2', label: 'L1+L2 free, then paywall' },
   ],
-  hypothesis:
-    'Two free Speak lessons (L1+L2) vs one (L1) will raise activation_complete without a material drop in premium conversion.',
-  guardrail:
-    'If treatment premium rate falls well below control, or paywall_viewed collapses, turn the flag off — new assignments stay on control_l1_free.',
-  requiresLearnerBinaryNote:
-    'Requires a learner binary that reads this flag. Older builds ignore it and stay on control.',
 }
 
 /** Hub list — add rows here as new flags ship. Do not build a creation wizard. */

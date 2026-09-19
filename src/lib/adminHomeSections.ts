@@ -102,8 +102,8 @@ export function buildSectionTiles(
       },
       {
         title: 'Experiments',
-        lines: ['A/B flags · hypotheses · results by arm'],
-        hint: 'Toggle known learner experiments. Requires a binary that reads the flag.',
+        lines: ['A/B flags · results by arm'],
+        hint: 'Toggle live experiments and read arm results.',
         route: 'AdminExperiments',
       },
     ]

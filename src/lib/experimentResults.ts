@@ -16,7 +16,7 @@ export type ExperimentArmStats = {
   label: string
   exposures: number
   uniqueUsers: number
-  activationComplete: number
+  lessonsCompleted: number
   paywallViewed: number
   premiumPurchased: number
 }
@@ -26,7 +26,6 @@ export type ExperimentResults = {
   sinceIso: string | null
   untilIso: string
   exposureEventName: string
-  sawActivationEvent: boolean
   sawPaywallEvent: boolean
   sawPremiumEvent: boolean
   totalExposures: number
@@ -41,7 +40,7 @@ const FETCH_CAP = 20_000
 /** Verified in prod: learner emits `experiment_exposed`. Accept the alias if it appears. */
 export const EXPERIMENT_EXPOSURE_EVENT_NAMES = ['experiment_exposed', 'experiment_exposure'] as const
 
-const FUNNEL_EVENT_NAMES = ['activation_complete', 'paywall_viewed', 'premium_purchased'] as const
+const FUNNEL_EVENT_NAMES = ['lesson_completed', 'paywall_viewed', 'premium_purchased'] as const
 
 const FETCH_EVENT_NAMES = [...EXPERIMENT_EXPOSURE_EVENT_NAMES, ...FUNNEL_EVENT_NAMES]
 
@@ -84,7 +83,6 @@ export function emptyResults(
     sinceIso: sinceIsoForRange(range, nowMs),
     untilIso: new Date(nowMs).toISOString(),
     exposureEventName: 'experiment_exposed',
-    sawActivationEvent: false,
     sawPaywallEvent: false,
     sawPremiumEvent: false,
     totalExposures: 0,
@@ -94,7 +92,7 @@ export function emptyResults(
       label: arm.label,
       exposures: 0,
       uniqueUsers: 0,
-      activationComplete: 0,
+      lessonsCompleted: 0,
       paywallViewed: 0,
       premiumPurchased: 0,
     })),
@@ -110,11 +108,11 @@ function rateEligible(count: number, uniqueUsers: number): string {
 
 export function formatArmRate(
   stats: ExperimentArmStats,
-  kind: 'activation' | 'paywall' | 'premium',
+  kind: 'lessons' | 'paywall' | 'premium',
 ): string {
   const count =
-    kind === 'activation'
-      ? stats.activationComplete
+    kind === 'lessons'
+      ? stats.lessonsCompleted
       : kind === 'paywall'
         ? stats.paywallViewed
         : stats.premiumPurchased
@@ -166,7 +164,7 @@ export function aggregateExperimentResults(
         label: labelByArm.get(assignedArm) ?? assignedArm,
         exposures: 0,
         uniqueUsers: 0,
-        activationComplete: 0,
+        lessonsCompleted: 0,
         paywallViewed: 0,
         premiumPurchased: 0,
       }
@@ -181,7 +179,6 @@ export function aggregateExperimentResults(
     }
   }
 
-  const activated = new Set<string>()
   const paywalled = new Set<string>()
   const purchased = new Set<string>()
 
@@ -193,12 +190,8 @@ export function aggregateExperimentResults(
     if (row.created_at && assigned.exposedAt && row.created_at < assigned.exposedAt) continue
     const stats = statsByArm.get(assigned.arm)
     if (!stats) continue
-    if (row.event_name === 'activation_complete') {
-      result.sawActivationEvent = true
-      if (!activated.has(uid)) {
-        activated.add(uid)
-        stats.activationComplete += 1
-      }
+    if (row.event_name === 'lesson_completed') {
+      stats.lessonsCompleted += 1
     } else if (row.event_name === 'paywall_viewed') {
       result.sawPaywallEvent = true
       if (!paywalled.has(uid)) {

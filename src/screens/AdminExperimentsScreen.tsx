@@ -17,7 +17,6 @@ import {
   emptyResults,
   fetchExperimentFlag,
   fetchExperimentResults,
-  formatArmRate,
   upsertExperimentFlag,
   type ExperimentDateRange,
   type ExperimentResults,
@@ -37,11 +36,8 @@ const CARD_BG = '#1c1c1e'
 const SCREEN_BG = '#0a0a0a'
 
 function formatRangeLabel(results: ExperimentResults): string {
-  const end = new Date(results.untilIso)
-  if (!results.sinceIso) {
-    return `All time through ${end.toLocaleString()}`
-  }
-  return `${new Date(results.sinceIso).toLocaleString()} → ${end.toLocaleString()}`
+  if (!results.sinceIso) return 'All time'
+  return `${new Date(results.sinceIso).toLocaleDateString()} – ${new Date(results.untilIso).toLocaleDateString()}`
 }
 
 function ExperimentCard({
@@ -83,28 +79,9 @@ function ExperimentCard({
         </View>
       </View>
 
-      <Text style={styles.flagMeta}>
-        Flag: app_config.{experiment.flagColumn}
-      </Text>
       {flag?.updatedAt ? (
-        <Text style={styles.flagMeta}>Last saved: {new Date(flag.updatedAt).toLocaleString()}</Text>
+        <Text style={styles.flagMeta}>Saved {new Date(flag.updatedAt).toLocaleDateString()}</Text>
       ) : null}
-
-      <Text style={styles.binaryNote}>{experiment.requiresLearnerBinaryNote}</Text>
-
-      <Text style={styles.sectionLabel}>Hypothesis</Text>
-      <Text style={styles.body}>{experiment.hypothesis}</Text>
-      <Text style={styles.sectionLabel}>Guardrail</Text>
-      <Text style={styles.body}>{experiment.guardrail}</Text>
-
-      <Text style={styles.sectionLabel}>Arms</Text>
-      {experiment.arms.map((arm) => (
-        <Text key={arm.id} style={styles.armLine}>
-          {arm.id}
-          {'\n'}
-          {arm.label}
-        </Text>
-      ))}
 
       <Text style={styles.sectionLabel}>Results</Text>
       <View style={styles.timeFilter}>
@@ -127,57 +104,34 @@ function ExperimentCard({
           </Pressable>
         ))}
       </View>
-      <Text style={styles.rangeMeta}>{formatRangeLabel(results)}</Text>
       <Text style={styles.rangeMeta}>
-        Exposures from {results.exposureEventName} · {results.totalExposures} events ·{' '}
-        {results.totalUniqueUsers} unique users
+        {formatRangeLabel(results)} · {results.totalUniqueUsers} users
       </Text>
       {results.truncated ? (
         <Text style={styles.warnText}>Result window truncated at the fetch cap.</Text>
       ) : null}
 
-      {results.totalUniqueUsers === 0 ? (
-        <Text style={styles.muted}>
-          No {results.exposureEventName} rows for this key in range. Turn the flag on after a
-          learner binary that emits exposures is live.
-        </Text>
-      ) : null}
-
       {results.arms.map((arm) => (
         <View key={arm.arm} style={styles.armStats}>
-          <Text style={styles.armStatsTitle}>{arm.arm}</Text>
-          <Text style={styles.armStatsLabel}>{arm.label}</Text>
+          <Text style={styles.armStatsTitle}>{arm.label}</Text>
           <View style={styles.metricRow}>
-            <View style={styles.metric}>
-              <Text style={styles.metricValue}>{arm.exposures}</Text>
-              <Text style={styles.metricLabel}>Exposures</Text>
-            </View>
             <View style={styles.metric}>
               <Text style={styles.metricValue}>{arm.uniqueUsers}</Text>
               <Text style={styles.metricLabel}>Users</Text>
             </View>
+            <View style={styles.metric}>
+              <Text style={styles.metricValue}>{arm.lessonsCompleted}</Text>
+              <Text style={styles.metricLabel}>Lessons</Text>
+            </View>
+            <View style={styles.metric}>
+              <Text style={styles.metricValue}>{arm.paywallViewed}</Text>
+              <Text style={styles.metricLabel}>Paywall</Text>
+            </View>
+            <View style={styles.metric}>
+              <Text style={styles.metricValue}>{arm.premiumPurchased}</Text>
+              <Text style={styles.metricLabel}>Premium</Text>
+            </View>
           </View>
-          {results.sawActivationEvent ? (
-            <Text style={styles.funnelLine}>
-              activation_complete · {formatArmRate(arm, 'activation')}
-            </Text>
-          ) : (
-            <Text style={styles.funnelMuted}>activation_complete · no events in range</Text>
-          )}
-          {results.sawPaywallEvent ? (
-            <Text style={styles.funnelLine}>
-              paywall_viewed · {formatArmRate(arm, 'paywall')}
-            </Text>
-          ) : (
-            <Text style={styles.funnelMuted}>paywall_viewed · no events in range</Text>
-          )}
-          {results.sawPremiumEvent ? (
-            <Text style={styles.funnelLine}>
-              premium_purchased · {formatArmRate(arm, 'premium')}
-            </Text>
-          ) : (
-            <Text style={styles.funnelMuted}>premium_purchased · no events in range</Text>
-          )}
         </View>
       ))}
     </View>
@@ -253,8 +207,8 @@ export default function AdminExperimentsScreen({ navigation }: Props) {
     Alert.alert(
       `${verb} ${experiment.key}?`,
       next
-        ? 'Learners on a binary that reads this flag will be assigned 50/50. Older binaries ignore it.'
-        : 'New assignments stay on control_l1_free. This writes only the experiment flag on app_config.',
+        ? 'New learners on a current build split 50/50. Older builds stay on control.'
+        : 'New assignments stay on control.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -304,10 +258,6 @@ export default function AdminExperimentsScreen({ navigation }: Props) {
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={ADMIN_ACCENT_GOLD} />
       }
     >
-      <Text style={styles.hint}>
-        Known learner A/B tests. Toggle writes one app_config column via service role. Results use
-        analytics_events (exclude_from_analytics users dropped when joinable).
-      </Text>
       {error ? <Text style={styles.errorBanner}>{error}</Text> : null}
 
       {KNOWN_EXPERIMENTS.map((experiment) => (
@@ -335,7 +285,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  hint: { color: '#9ca3af', fontSize: 13, lineHeight: 18, marginBottom: 12 },
   errorBanner: { color: '#f87171', marginBottom: 12, fontSize: 14 },
   card: {
     backgroundColor: CARD_BG,
@@ -364,12 +313,6 @@ const styles = StyleSheet.create({
   toggleLabel: { color: '#8e8e93', fontSize: 12, fontWeight: '700' },
   toggleLabelOn: { color: ADMIN_ACCENT_GOLD },
   flagMeta: { color: '#6b7280', fontSize: 12, marginTop: 2 },
-  binaryNote: {
-    color: '#fbbf24',
-    fontSize: 12,
-    lineHeight: 17,
-    marginTop: 10,
-  },
   sectionLabel: {
     fontSize: 10,
     fontWeight: '700',
@@ -379,8 +322,6 @@ const styles = StyleSheet.create({
     marginTop: 14,
     marginBottom: 6,
   },
-  body: { color: '#d1d5db', fontSize: 13, lineHeight: 18 },
-  armLine: { color: '#9ca3af', fontSize: 12, lineHeight: 17, marginBottom: 6 },
   timeFilter: {
     flexDirection: 'row',
     backgroundColor: '#2a2a2a',
@@ -400,15 +341,13 @@ const styles = StyleSheet.create({
   tfBtnTextActive: { color: '#fff', fontWeight: '600' },
   rangeMeta: { color: '#6b7280', fontSize: 12, lineHeight: 16, marginBottom: 2 },
   warnText: { color: '#fbbf24', fontSize: 12, marginTop: 6 },
-  muted: { color: '#71717a', fontSize: 13, lineHeight: 18, marginTop: 8 },
   armStats: {
     marginTop: 12,
     backgroundColor: '#141414',
     borderRadius: 12,
     padding: 12,
   },
-  armStatsTitle: { color: '#fff', fontSize: 13, fontWeight: '700' },
-  armStatsLabel: { color: '#8e8e93', fontSize: 12, marginTop: 2, marginBottom: 8 },
+  armStatsTitle: { color: '#fff', fontSize: 13, fontWeight: '700', marginBottom: 8 },
   metricRow: { flexDirection: 'row', gap: 8, marginBottom: 8 },
   metric: {
     flex: 1,
@@ -419,6 +358,4 @@ const styles = StyleSheet.create({
   },
   metricValue: { color: '#fff', fontSize: 20, fontWeight: '700' },
   metricLabel: { color: '#888', fontSize: 11, marginTop: 2 },
-  funnelLine: { color: '#d1d5db', fontSize: 12, lineHeight: 18, marginTop: 2 },
-  funnelMuted: { color: '#6b7280', fontSize: 12, lineHeight: 18, marginTop: 2 },
 })
