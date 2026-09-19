@@ -1,5 +1,5 @@
 import { Suspense, lazy } from 'react'
-import { ActivityIndicator, Platform, StatusBar, View } from 'react-native'
+import { ActivityIndicator, Platform, StatusBar, Text, View } from 'react-native'
 import { NavigationContainer } from '@react-navigation/native'
 import { createStackNavigator } from '@react-navigation/stack'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
@@ -41,6 +41,7 @@ import QubeeLettersHubScreen from './src/screens/QubeeLettersHubScreen'
 import FidelRecorderHomeScreen from './src/screens/FidelRecorderHomeScreen'
 import FidelLettersHubScreen from './src/screens/FidelLettersHubScreen'
 import { AuthProvider, useAuth } from './src/context/AuthContext'
+import { isSupabaseConfigured } from './src/lib/expoPublicEnv'
 import type { RootStackParamList } from './src/types'
 
 /** Lazy: load expo-av only when needed — avoids ExponentAV / runtime init races on iOS. */
@@ -232,6 +233,27 @@ function AppStack() {
 }
 
 export default function App() {
+  if (!isSupabaseConfigured()) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: '#0a0a0a',
+          justifyContent: 'center',
+          paddingHorizontal: 28,
+        }}
+      >
+        <Text style={{ color: '#fff', fontSize: 18, fontWeight: '600', marginBottom: 10 }}>
+          This TestFlight build is missing Supabase config
+        </Text>
+        <Text style={{ color: '#c7c7cc', fontSize: 15, lineHeight: 22 }}>
+          The simulator reads .env. Store builds need EXPO_PUBLIC_SUPABASE_URL and
+          EXPO_PUBLIC_SUPABASE_ANON_KEY on the EAS production profile.
+        </Text>
+      </View>
+    )
+  }
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AuthProvider>

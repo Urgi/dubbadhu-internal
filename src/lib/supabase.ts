@@ -50,7 +50,19 @@ if (__DEV__) {
   )
 }
 
-const supabase = createClient(SUPABASE_URL, clientKey)
+function createSupabaseClient() {
+  if (!SUPABASE_URL || !clientKey) {
+    console.error(
+      '[supabase] Missing URL or key in this binary. Set EXPO_PUBLIC_SUPABASE_* on the EAS production profile.',
+    )
+    return createClient('https://placeholder.supabase.co', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.e', {
+      auth: { persistSession: false, autoRefreshToken: false },
+    })
+  }
+  return createClient(SUPABASE_URL, clientKey)
+}
+
+const supabase = createSupabaseClient()
 
 export const wordsQuery = () => supabase.from('words').select('*')
 

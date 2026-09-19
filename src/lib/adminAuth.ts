@@ -9,12 +9,16 @@ const supabaseAnonKey = getExpoPublicSupabaseAnonKey()
 /**
  * Dedicated auth client using anon key for user-level OTP sign-in.
  */
-const authClient = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    persistSession: false,
-    autoRefreshToken: false,
+const authClient = createClient(
+  supabaseUrl || 'https://placeholder.supabase.co',
+  supabaseAnonKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.e',
+  {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
   },
-})
+)
 
 export async function sendAdminOtp(
   email: string = ADMIN_EMAIL,

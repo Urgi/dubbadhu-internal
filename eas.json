@@ -18,7 +18,9 @@
     "preview": {
       "distribution": "internal",
       "env": {
-        "EAS_BUILD_DISABLE_EXPO_DOCTOR_STEP": "1"
+        "EAS_BUILD_DISABLE_EXPO_DOCTOR_STEP": "1",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://hvyqcfehonhwoayrvggk.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_8tmM9JzaogVjGEFLK41dqg_IHACvSRn"
       },
       "ios": {
         "simulator": false,
@@ -41,7 +43,9 @@
     "production": {
       "autoIncrement": true,
       "env": {
-        "EAS_BUILD_DISABLE_EXPO_DOCTOR_STEP": "1"
+        "EAS_BUILD_DISABLE_EXPO_DOCTOR_STEP": "1",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://hvyqcfehonhwoayrvggk.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_8tmM9JzaogVjGEFLK41dqg_IHACvSRn"
       },
       "ios": {
         "image": "macos-sequoia-15.6-xcode-26.2"
