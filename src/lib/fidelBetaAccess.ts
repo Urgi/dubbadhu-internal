@@ -17,8 +17,9 @@ export async function fetchFidelBetaUsers(): Promise<{
   error: string | null
 }> {
   const { data, error } = await supabase
-    .from('fidel_beta_access')
+    .from('user_access_grants')
     .select('user_id, phone, note, created_at')
+    .eq('grant_type', 'fidel_beta')
     .order('created_at', { ascending: false })
 
   if (error) return { data: null, error: error.message }
@@ -66,13 +67,14 @@ export async function grantFidelBetaAccess(args: {
   const userId = String(args.userId ?? '').trim()
   if (!userId) return { ok: false, error: 'Missing user id' }
 
-  const { error } = await supabase.from('fidel_beta_access').upsert(
+  const { error } = await supabase.from('user_access_grants').upsert(
     {
       user_id: userId,
+      grant_type: 'fidel_beta',
       phone: args.phone?.trim() || null,
       note: String(args.note ?? '').trim(),
     },
-    { onConflict: 'user_id' },
+    { onConflict: 'user_id,grant_type' },
   )
 
   if (error) return { ok: false, error: error.message }
@@ -85,7 +87,11 @@ export async function revokeFidelBetaAccess(
   const id = String(userId ?? '').trim()
   if (!id) return { ok: false, error: 'Missing user id' }
 
-  const { error } = await supabase.from('fidel_beta_access').delete().eq('user_id', id)
+  const { error } = await supabase
+    .from('user_access_grants')
+    .delete()
+    .eq('user_id', id)
+    .eq('grant_type', 'fidel_beta')
   if (error) return { ok: false, error: error.message }
   return { ok: true }
 }

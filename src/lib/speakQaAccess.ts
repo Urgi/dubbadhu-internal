@@ -17,8 +17,9 @@ export async function fetchSpeakQaUsers(): Promise<{
   error: string | null
 }> {
   const { data, error } = await supabase
-    .from('internal_qa_catalog_access')
+    .from('user_access_grants')
     .select('user_id, phone, note, created_at')
+    .eq('grant_type', 'internal_qa_catalog')
     .order('created_at', { ascending: false })
 
   if (error) return { data: null, error: error.message }
@@ -65,13 +66,14 @@ export async function grantSpeakQaAccess(args: {
   const userId = String(args.userId ?? '').trim()
   if (!userId) return { ok: false, error: 'Missing user id' }
 
-  const { error } = await supabase.from('internal_qa_catalog_access').upsert(
+  const { error } = await supabase.from('user_access_grants').upsert(
     {
       user_id: userId,
+      grant_type: 'internal_qa_catalog',
       phone: args.phone?.trim() || null,
       note: String(args.note ?? '').trim(),
     },
-    { onConflict: 'user_id' },
+    { onConflict: 'user_id,grant_type' },
   )
 
   if (error) return { ok: false, error: error.message }
@@ -84,7 +86,11 @@ export async function revokeSpeakQaAccess(
   const id = String(userId ?? '').trim()
   if (!id) return { ok: false, error: 'Missing user id' }
 
-  const { error } = await supabase.from('internal_qa_catalog_access').delete().eq('user_id', id)
+  const { error } = await supabase
+    .from('user_access_grants')
+    .delete()
+    .eq('user_id', id)
+    .eq('grant_type', 'internal_qa_catalog')
   if (error) return { ok: false, error: error.message }
   return { ok: true }
 }

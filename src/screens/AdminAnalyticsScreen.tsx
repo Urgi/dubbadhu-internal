@@ -144,6 +144,7 @@ export default function AdminAnalyticsScreen({ navigation }: Props) {
   const [activeToday, setActiveToday] = useState<number | null>(null)
   const [retention, setRetention] = useState<RetentionRow[]>([])
   const [waitlistByLang, setWaitlistByLang] = useState<{ language: string; count: number }[]>([])
+  const [tutorInterestCount, setTutorInterestCount] = useState<number | null>(null)
   const [loadErrors, setLoadErrors] = useState<string[]>([])
   const [reliability24h, setReliability24h] = useState<Reliability24hSummary | null>(null)
   const [retentionRange, setRetentionRange] = useState<RetentionRange>('30d')
@@ -207,6 +208,17 @@ export default function AdminAnalyticsScreen({ navigation }: Props) {
           language: String(row.language || 'Unknown').trim() || 'Unknown',
           count: Number(row.signup_count ?? 0),
         })) ?? [],
+      )
+    }
+
+    const tutorRes = await supabase.rpc('admin_learning_interest_counts')
+    if (tutorRes.error) {
+      errs.push(`learning_interest: ${tutorRes.error.message}`)
+      setTutorInterestCount(null)
+    } else {
+      const rows = (tutorRes.data as { kind?: string; signup_count?: number }[] | null) ?? []
+      setTutorInterestCount(
+        rows.reduce((sum, row) => sum + Number(row.signup_count ?? 0), 0),
       )
     }
 
@@ -551,6 +563,19 @@ export default function AdminAnalyticsScreen({ navigation }: Props) {
             )
           })
         )}
+      </View>
+
+      <Text style={styles.sectionLabel}>Tutor interest</Text>
+      <View style={styles.card}>
+        <View style={styles.cardHeader}>
+          <Text style={styles.cardTitle}>Emails</Text>
+          <Text style={styles.cardSource}>
+            {tutorInterestCount == null ? '—' : `${tutorInterestCount} total`}
+          </Text>
+        </View>
+        <Text style={styles.muted}>
+          Live tutor and class interest emails from Home / Settings.
+        </Text>
       </View>
 
       <Pressable

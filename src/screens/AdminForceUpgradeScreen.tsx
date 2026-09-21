@@ -20,6 +20,8 @@ type Props = StackScreenProps<RootStackParamList, 'AdminForceUpgrade'>
 type ConfigRow = {
   min_ios_version: string
   min_android_version: string
+  latest_ios_version: string
+  latest_android_version: string
   force_upgrade_message: string
   updated_at?: string
 }
@@ -32,13 +34,17 @@ export default function AdminForceUpgradeScreen({ navigation }: Props) {
   const [saving, setSaving] = useState(false)
   const [minIos, setMinIos] = useState('')
   const [minAndroid, setMinAndroid] = useState('')
+  const [latestIos, setLatestIos] = useState('')
+  const [latestAndroid, setLatestAndroid] = useState('')
   const [message, setMessage] = useState('')
   const [updatedAt, setUpdatedAt] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     const { data, error } = await supabase
       .from('app_config')
-      .select('min_ios_version, min_android_version, force_upgrade_message, updated_at')
+      .select(
+        'min_ios_version, min_android_version, latest_ios_version, latest_android_version, force_upgrade_message, updated_at',
+      )
       .eq('id', 1)
       .maybeSingle()
     if (error) {
@@ -48,6 +54,8 @@ export default function AdminForceUpgradeScreen({ navigation }: Props) {
     const row = data as ConfigRow | null
     setMinIos(row?.min_ios_version || '')
     setMinAndroid(row?.min_android_version || '')
+    setLatestIos(row?.latest_ios_version || '')
+    setLatestAndroid(row?.latest_android_version || '')
     setMessage(row?.force_upgrade_message || '')
     setUpdatedAt(row?.updated_at || null)
   }, [])
@@ -83,6 +91,8 @@ export default function AdminForceUpgradeScreen({ navigation }: Props) {
         id: 1,
         min_ios_version: minIos.trim(),
         min_android_version: minAndroid.trim(),
+        latest_ios_version: latestIos.trim(),
+        latest_android_version: latestAndroid.trim(),
         force_upgrade_message: message.trim(),
       })
     setSaving(false)
@@ -97,7 +107,7 @@ export default function AdminForceUpgradeScreen({ navigation }: Props) {
         : 'Force upgrade cleared — all versions can open the app.',
     )
     await load()
-  }, [minIos, minAndroid, message, load])
+  }, [minIos, minAndroid, latestIos, latestAndroid, message, load])
 
   const clearMins = useCallback(() => {
     Alert.alert('Clear minimums?', 'All installed versions will be allowed again.', [
@@ -125,8 +135,9 @@ export default function AdminForceUpgradeScreen({ navigation }: Props) {
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <Text style={styles.hint}>
         Leave a version blank to disable the gate for that platform. Use marketing versions
-        (e.g. 1.1.60), same as app.json. Only raise mins after the new build is live in the
-        stores — and after a breaking schema change.
+        (e.g. 1.1.60), same as app.json. Latest versions show a dismissible “update available”
+        card (you’re on X / available Y). Only raise mins after the new build is live — and
+        after a breaking schema change.
       </Text>
 
       {updatedAt ? (
@@ -155,7 +166,29 @@ export default function AdminForceUpgradeScreen({ navigation }: Props) {
         onChangeText={setMinAndroid}
       />
 
-      <Text style={styles.label}>Message (optional)</Text>
+      <Text style={styles.label}>Latest iOS version (optional update)</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="e.g. 1.1.84 (blank = no suggestion)"
+        placeholderTextColor="#666"
+        autoCapitalize="none"
+        autoCorrect={false}
+        value={latestIos}
+        onChangeText={setLatestIos}
+      />
+
+      <Text style={styles.label}>Latest Android version (optional update)</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="e.g. 1.1.84 (blank = no suggestion)"
+        placeholderTextColor="#666"
+        autoCapitalize="none"
+        autoCorrect={false}
+        value={latestAndroid}
+        onChangeText={setLatestAndroid}
+      />
+
+      <Text style={styles.label}>Force-upgrade message (optional)</Text>
       <TextInput
         style={[styles.input, styles.inputMulti]}
         placeholder={DEFAULT_MESSAGE}

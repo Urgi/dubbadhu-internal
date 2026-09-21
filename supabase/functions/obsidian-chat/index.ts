@@ -60,7 +60,7 @@ Useful tables:
 - analytics_events(id uuid, user_id uuid, event_name text, properties jsonb, created_at timestamptz)
   Typical events: signup_completed, activation_complete, app_opened, lesson_started, lesson_completed, lesson_screen_viewed, lesson_exited, sentence_submitted, vocab_quiz_*, subscription_viewed, premium_purchased, component_error, *_error / *_failed
 - users(id, phone, first_name, "isPremium", created_at, lessons_completed, exclude_from_analytics, premium_source, premium_product_id)
-- waitlist_signups, retention_cohorts (view), lesson_series, lessons`
+- interest_signups, user_access_grants, retention_cohorts (view), lesson_series, lessons`
 
 type ChatBody = {
   thread_id?: string

@@ -164,7 +164,7 @@ export default function AdminFidelBetaScreen({ navigation }: Props) {
     >
       <Text style={styles.lead}>
         Allowlist for Profile → Languages → Continue (Amharic Fidel). Changes apply without a new
-        learner App Store build (needs DB table + an app that reads fidel_beta_access).
+        learner App Store build (needs user_access_grants + an app that reads grant_type fidel_beta).
       </Text>
       {error ? <Text style={styles.errorBanner}>{error}</Text> : null}
 
