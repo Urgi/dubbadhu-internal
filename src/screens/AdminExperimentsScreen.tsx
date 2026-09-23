@@ -66,29 +66,18 @@ function ExperimentCard({
           <Text style={styles.experimentKey}>{experiment.key}</Text>
           <Text style={styles.cardTitle}>{experiment.title}</Text>
         </View>
-        {experiment.flagColumn ? (
-          <View style={styles.toggleWrap}>
-            <Text style={[styles.toggleLabel, enabled && styles.toggleLabelOn]}>
-              {enabled ? 'On' : 'Off'}
-            </Text>
-            <Switch
-              value={enabled}
-              onValueChange={onToggle}
-              disabled={saving || flag == null}
-              trackColor={{ true: ADMIN_ACCENT_GOLD, false: '#3a3a3c' }}
-              accessibilityLabel={`${experiment.key} enabled`}
-            />
-          </View>
-        ) : (
-          <Text
-            style={[
-              styles.alwaysOn,
-              experiment.running === false && styles.heldLabel,
-            ]}
-          >
-            {experiment.running === false ? 'Held' : 'Live'}
+        <View style={styles.toggleWrap}>
+          <Text style={[styles.toggleLabel, enabled && styles.toggleLabelOn]}>
+            {enabled ? 'Live' : 'Stopped'}
           </Text>
-        )}
+          <Switch
+            value={enabled}
+            onValueChange={onToggle}
+            disabled={saving || flag == null}
+            trackColor={{ true: ADMIN_ACCENT_GOLD, false: '#3a3a3c' }}
+            accessibilityLabel={`${enabled ? 'Stop' : 'Start'} ${experiment.key}`}
+          />
+        </View>
       </View>
 
       {flag?.updatedAt ? (
@@ -227,12 +216,12 @@ export default function AdminExperimentsScreen({ navigation }: Props) {
 
   const onToggle = useCallback((experiment: KnownExperiment, next: boolean) => {
     if (!experiment.flagColumn) return
-    const verb = next ? 'Turn on' : 'Turn off'
+    const verb = next ? 'Start' : 'Stop'
     Alert.alert(
       `${verb} ${experiment.key}?`,
       next
-        ? 'New learners on a current build split 50/50. Older builds stay on control.'
-        : 'New assignments stay on control.',
+        ? 'Learners on a current build split 50/50. Older builds keep their current behavior.'
+        : 'Learners on a current build stay on the control arm. Older builds keep their current behavior.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -368,8 +357,6 @@ const styles = StyleSheet.create({
   toggleWrap: { alignItems: 'flex-end', gap: 4 },
   toggleLabel: { color: '#8e8e93', fontSize: 12, fontWeight: '700' },
   toggleLabelOn: { color: ADMIN_ACCENT_GOLD },
-  alwaysOn: { color: ADMIN_ACCENT_GOLD, fontSize: 12, fontWeight: '700', marginTop: 4 },
-  heldLabel: { color: '#8e8e93' },
   flagMeta: { color: '#6b7280', fontSize: 12, marginTop: 2 },
   thresholdLine: { color: '#d1d5db', fontSize: 13, lineHeight: 18, marginTop: 4 },
   thresholdKill: { color: '#fca5a5', fontSize: 13, lineHeight: 18, marginTop: 4 },

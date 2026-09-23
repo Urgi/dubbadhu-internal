@@ -7,6 +7,8 @@ export const APP_CONFIG_ROW_ID = 1
 
 /** Prod/staging column (migration `app_config_paywall_free_n_experiment`). */
 export const PAYWALL_FREE_N_FLAG_COLUMN = 'paywall_free_n_experiment_enabled' as const
+export const TIMED_COMMENTS_FLAG_COLUMN = 'timed_comments_experiment_enabled' as const
+export const MIC_SKIP_FLAG_COLUMN = 'mic_skip_experiment_enabled' as const
 
 export type ExperimentArm = {
   id: string
@@ -16,10 +18,8 @@ export type ExperimentArm = {
 export type KnownExperiment = {
   key: string
   title: string
-  /** `app_config` boolean this screen may upsert. Omit = no remote switch. */
-  flagColumn?: string
-  /** false = held (not splitting). Comments is the only live test. */
-  running?: boolean
+  /** `app_config` boolean this screen starts and stops. */
+  flagColumn: string
   arms: ExperimentArm[]
   metric: string
   keep: string
@@ -45,7 +45,7 @@ export const PAYWALL_FREE_N_V1: KnownExperiment = {
 export const TIMED_COMMENTS_V1: KnownExperiment = {
   key: 'timed_comments_v1',
   title: 'Series-1 video · timed comments',
-  running: true,
+  flagColumn: TIMED_COMMENTS_FLAG_COLUMN,
   arms: [
     { id: 'comments_on', label: 'Comments on' },
     { id: 'comments_off', label: 'Comments off' },
@@ -59,7 +59,7 @@ export const TIMED_COMMENTS_V1: KnownExperiment = {
 export const MIC_SKIP_V1: KnownExperiment = {
   key: 'mic_skip_v1',
   title: 'Speaking · mic skip',
-  running: false,
+  flagColumn: MIC_SKIP_FLAG_COLUMN,
   arms: [
     { id: 'skip_on', label: 'Skip shown' },
     { id: 'skip_off', label: 'Skip hidden' },

@@ -40,9 +40,9 @@ module.exports = ({ config }) => {
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
     process.env.EXPO_PUBLIC_SUPABASE_SERVICE_ROLE_KEY ||
     ''
-  if (process.env.EAS_BUILD === 'true' && !serviceRole) {
+  if (!serviceRole) {
     throw new Error(
-      'SUPABASE_SERVICE_ROLE_KEY missing during EAS build. Source Internal .env in the same shell (gitignored files are not copied into the local archive).',
+      'SUPABASE_SERVICE_ROLE_KEY missing. Local EAS does not copy gitignored .env; run scripts/eas-ios-local-with-env.sh so the key is in the process before the archive is built.',
     )
   }
 
