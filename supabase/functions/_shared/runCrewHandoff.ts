@@ -7,7 +7,6 @@ import {
   type ObsidianJobPayload,
 } from './obsidianJob.ts'
 import {
-  ACE_WEBHOOK_URL,
   HISTORY_LIMIT,
   historyAsContext,
   oneSentenceGoal,
@@ -23,6 +22,7 @@ export async function runCrewHandoff(opts: {
   threadId: string
   route: AceRoute
   content: string
+  webhookUrl: string
   webhookKey: string
   urgency?: Urgency
   goal?: string
@@ -32,7 +32,7 @@ export async function runCrewHandoff(opts: {
   existingMessageId?: string
   sourceMessageIds?: string[]
 }): Promise<Response | { pending: ObsidianMessageRow }> {
-  const { db, threadId, route, content, webhookKey } = opts
+  const { db, threadId, route, content, webhookUrl, webhookKey } = opts
   const urgency: Urgency = opts.urgency ?? 'normal'
 
   const historyRes = await db
@@ -128,7 +128,7 @@ export async function runCrewHandoff(opts: {
   }
 
   try {
-    const aceRes = await fetch(ACE_WEBHOOK_URL, {
+    const crewRes = await fetch(webhookUrl, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${webhookKey}`,
@@ -136,12 +136,12 @@ export async function runCrewHandoff(opts: {
       },
       body: JSON.stringify(payload),
     })
-    if (!aceRes.ok) {
-      const text = await aceRes.text().catch(() => '')
+    if (!crewRes.ok) {
+      const text = await crewRes.text().catch(() => '')
       const failed = serializeObsidianJob({
         ...job,
         jobStatus: 'failed',
-        progressNote: `Handoff failed (HTTP ${aceRes.status}). ${text.slice(0, 280)}`.trim(),
+        progressNote: `Handoff failed (HTTP ${crewRes.status}). ${text.slice(0, 280)}`.trim(),
       })
       await db
         .from('obsidian_messages')
@@ -150,13 +150,13 @@ export async function runCrewHandoff(opts: {
       return jsonResponse(
         {
           ok: false,
-          error: `Ace webhook HTTP ${aceRes.status}${text ? `: ${text.slice(0, 200)}` : ''}`,
+          error: `${CREW_HANDLES[route].name} webhook HTTP ${crewRes.status}${text ? `: ${text.slice(0, 200)}` : ''}`,
         },
         502,
       )
     }
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Ace webhook request failed.'
+    const message = err instanceof Error ? err.message : 'Crew webhook request failed.'
     await db
       .from('obsidian_messages')
       .update({

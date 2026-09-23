@@ -6,12 +6,14 @@ export type ObsidianSendDecision =
   | { action: 'handoff'; route: AceRoute }
 
 export const OBSIDIAN_ROUTE_SYSTEM = `You route Obsidian desk messages. Reply with JSON only.
-{"action":"chat"} if Obsidian can think, draft, explain, plan, answer, or look up product data with SQL.
-{"action":"handoff","route":"ace"|"moti"|"jack"|"queen"|"nigus"} if the user wants a specialized agent to execute work.
-Do not hand off analytics lookups — Obsidian can run read-only SQL.
+{"action":"chat"} if Obsidian can think, draft, explain, plan, answer from product facts, or look up data with SQL.
+{"action":"handoff","route":"ace"|"moti"|"jack"|"queen"|"nigus"} only when the user wants a specialized agent to execute work.
+Analytics lookups stay chat. Counts, retention, funnels, and "how many" are not jobs, even if they mention OTP, mic, or friends.
+Engineering execution goes to jack: bugs, broken mic, OTP failures to fix, friends-invite bugs, instrumentation.
+Unnamed "assign this" stays ace. Afaan content execution is moti. Amharic content execution is nigus. Marketing and paywall framing is queen.
+Do not hand off a lookup. Do not invent language truth.
 Crew:
-${CREW_HANDLES_BLOCK}
-Default handoff route is ace when the user asks to assign work without naming someone.`
+${CREW_HANDLES_BLOCK}`
 
 export function parseObsidianSendDecision(raw: string): ObsidianSendDecision | null {
   const match = raw.match(/\{[\s\S]*\}/)
@@ -30,12 +32,20 @@ export function parseObsidianSendDecision(raw: string): ObsidianSendDecision | n
   return null
 }
 
-export function heuristicObsidianSendDecision(text: string): ObsidianSendDecision {
+const UNNAMED_JOB =
+  /\b(give this to|hand (this|it) (off )?to|hand off|assign (this|it)|job for|delegate|have \w+ review|turn this (conversation|thread) into a job)\b/
+
+const ANALYTICS_LOOKUP =
+  /\b(how many|how much|count of|number of|retention|funnel|conversion|cohort|breakdown|percent|percentage|what(?:'s| is) the (?:rate|number|count)|last \d+ days|over the last|this week|analytics)\b/i
+
+const JACK_DOMAIN =
+  /\b(friends?(?:\s+invite)?|not_found|microphone|\bmic\b|otp|one-time password|instrumentation|signin_failed)\b/i
+
+const JACK_EXECUTE =
+  /\b(bug|crash|broken|regression|debug|fix|instrument|not working|doesn'?t work|failing)\b/i
+
+export function explicitCrewRoute(text: string): AceRoute | null {
   const t = text.toLowerCase()
-  const wantsJob =
-    /\b(give this to|hand (this|it) (off )?to|hand off|assign (this|it)|job for|delegate|have \w+ review|turn this (conversation|thread) into a job)\b/.test(
-      t,
-    )
   for (const route of CREW_ROUTES) {
     if (
       new RegExp(`(?:^|\\s)@${route}\\b`).test(t) ||
@@ -44,11 +54,42 @@ export function heuristicObsidianSendDecision(text: string): ObsidianSendDecisio
       t.includes(`ask ${route}`) ||
       t.includes(`have ${route}`) ||
       t.includes(`job for ${route}`) ||
-      t.includes(`talk to ${route}`)
+      t.includes(`talk to ${route}`) ||
+      t.includes(`send this to ${route}`) ||
+      t.includes(`send it to ${route}`)
     ) {
-      return { action: 'handoff', route }
+      return route
     }
   }
-  if (wantsJob) return { action: 'handoff', route: 'ace' }
+  return null
+}
+
+export function isAnalyticsLookup(text: string): boolean {
+  return ANALYTICS_LOOKUP.test(text)
+}
+
+function looksLikeJackEngJob(text: string): boolean {
+  return JACK_DOMAIN.test(text) && JACK_EXECUTE.test(text)
+}
+
+function wantsUnnamedJob(text: string): boolean {
+  return UNNAMED_JOB.test(text.toLowerCase())
+}
+
+export function resolveObsidianSendDecision(
+  content: string,
+  model: ObsidianSendDecision | null,
+): ObsidianSendDecision {
+  const mentioned = explicitCrewRoute(content)
+  if (mentioned) return { action: 'handoff', route: mentioned }
+  if (isAnalyticsLookup(content)) return { action: 'chat' }
+  if (looksLikeJackEngJob(content)) return { action: 'handoff', route: 'jack' }
+  if (model?.action === 'handoff' && model.route === 'jack') return { action: 'chat' }
+  if (model) return model
+  if (wantsUnnamedJob(content)) return { action: 'handoff', route: 'ace' }
   return { action: 'chat' }
+}
+
+export function heuristicObsidianSendDecision(text: string): ObsidianSendDecision {
+  return resolveObsidianSendDecision(text, null)
 }

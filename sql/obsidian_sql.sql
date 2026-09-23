@@ -1,6 +1,7 @@
 -- Read-only SQL runner for Obsidian (admin thinking desk).
 -- Called by obsidian-chat via service_role only. Apply on prod, then staging.
 -- Pair with Edge Function deploy: obsidian-chat.
+-- Also creates analytics-safe views used by that function.
 
 create or replace function public.obsidian_exec_readonly_sql(p_sql text)
 returns jsonb
@@ -47,3 +48,22 @@ comment on function public.obsidian_exec_readonly_sql(text) is
 
 revoke all on function public.obsidian_exec_readonly_sql(text) from public, anon, authenticated;
 grant execute on function public.obsidian_exec_readonly_sql(text) to service_role;
+
+-- security_invoker off so obsidian_exec_readonly_sql can read the base tables.
+create or replace view public.obsidian_users_analytics
+with (security_invoker = false) as
+select *
+from public.users
+where coalesce(exclude_from_analytics, false) = false;
+
+create or replace view public.obsidian_events_analytics
+with (security_invoker = false) as
+select e.*
+from public.analytics_events e
+where e.user_id is null
+   or e.user_id in (select id from public.obsidian_users_analytics);
+
+revoke all on public.obsidian_users_analytics from public, anon, authenticated;
+revoke all on public.obsidian_events_analytics from public, anon, authenticated;
+grant select on public.obsidian_users_analytics to service_role;
+grant select on public.obsidian_events_analytics to service_role;

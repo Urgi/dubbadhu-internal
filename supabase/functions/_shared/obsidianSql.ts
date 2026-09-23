@@ -11,7 +11,7 @@ export const RUN_SQL_TOOL = {
   function: {
     name: 'run_sql',
     description:
-      'Run one read-only SELECT (or WITH … SELECT) against Dubbadhu Postgres. Use for analytics, users, events, retention, waitlist, lessons. Always filter exclude_from_analytics. Prefer aggregates and LIMIT. Do not mutate data.',
+      'Run one read-only SELECT (or WITH … SELECT) against Dubbadhu Postgres. Prefer obsidian_users_analytics and obsidian_events_analytics so exclude_from_analytics accounts are already out. Ethiopia phones start with 251 after stripping non-digits. Discover unknown tables via information_schema.columns. Do not invent columns. Prefer aggregates and LIMIT. Do not mutate data.',
     parameters: {
       type: 'object',
       properties: {

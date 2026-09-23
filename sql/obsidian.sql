@@ -1,8 +1,8 @@
 -- Obsidian MVP — admin thinking desk (threads + messages).
 -- Apply in Supabase → SQL Editor on the Internal project (prod, then staging if used).
--- Apply order: this file, then sql/obsidian_sql.sql (read-only SQL plugin).
+-- Apply order: this file, sql/obsidian_retention.sql, then sql/obsidian_sql.sql.
 -- After SQL succeeds, deploy Edge Functions:
---   obsidian-chat, obsidian-handoff, obsidian-reply
+--   obsidian-chat, obsidian-handoff, obsidian-reply, obsidian-purge-stale
 -- Then enable Realtime for these tables in Dashboard if the publication block below is skipped.
 --
 -- Admin gate matches src/lib/adminAuth.ts (ADMIN_EMAIL). JWT `email` is the GoTrue claim,
@@ -15,7 +15,11 @@ create table if not exists public.obsidian_threads (
   title text not null default 'New thread',
   created_by uuid references auth.users (id) on delete set null,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  keep boolean not null default false,
+  kept_at timestamptz,
+  constraint obsidian_threads_keep_check
+    check ((keep = false and kept_at is null) or (keep = true and kept_at is not null))
 );
 
 create table if not exists public.obsidian_messages (
