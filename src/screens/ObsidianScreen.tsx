@@ -1,6 +1,7 @@
 import { useCallback, useLayoutEffect, useState } from 'react'
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -11,7 +12,12 @@ import {
 import { useFocusEffect } from '@react-navigation/native'
 import type { StackScreenProps } from '@react-navigation/stack'
 import { ADMIN_ACCENT_GOLD } from '../components/lesson-config/AdminLessonConfigChrome'
-import { createObsidianThread, listObsidianThreads, type ObsidianThread } from '../lib/obsidian'
+import {
+  createObsidianThread,
+  listObsidianThreads,
+  setObsidianThreadKeep,
+  type ObsidianThread,
+} from '../lib/obsidian'
 import type { RootStackParamList } from '../types'
 
 type Props = StackScreenProps<RootStackParamList, 'Obsidian'>
@@ -73,6 +79,47 @@ export default function ObsidianScreen({ navigation }: Props) {
     setRefreshing(false)
   }, [load])
 
+  const commitKeep = useCallback(async (thread: ObsidianThread, keep: boolean) => {
+    const keptAt = keep ? new Date().toISOString() : null
+    let snapshot: ObsidianThread[] = []
+    setThreads((rows) => {
+      snapshot = rows
+      return rows.map((row) => (row.id === thread.id ? { ...row, keep, kept_at: keptAt } : row))
+    })
+    const result = await setObsidianThreadKeep(thread.id, keep)
+    const saved = result.data
+    if (result.error || !saved) {
+      setThreads(snapshot)
+      setError(result.error || 'Could not update keep.')
+      return
+    }
+    setThreads((rows) =>
+      rows.map((row) => (row.id === thread.id ? { ...row, keep: saved.keep, kept_at: saved.kept_at } : row)),
+    )
+  }, [])
+
+  const onLongPressKeep = useCallback(
+    (thread: ObsidianThread) => {
+      const next = !thread.keep
+      Alert.alert(
+        next ? 'Keep this thread?' : 'Remove keep?',
+        next
+          ? 'Kept threads stay after the 7-day cleanup. Long-press again to un-keep.'
+          : 'This thread can be deleted after 7 days without activity.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: next ? 'Keep' : 'Remove keep',
+            onPress: () => {
+              void commitKeep(thread, next)
+            },
+          },
+        ],
+      )
+    },
+    [commitKeep],
+  )
+
   const onNewThread = useCallback(async () => {
     if (creating) return
     setCreating(true)
@@ -103,7 +150,8 @@ export default function ObsidianScreen({ navigation }: Props) {
       }
     >
       <Text style={styles.lead}>
-        Your Dubbadhu thinking desk. Stay in one thread — delegate jobs to Ace and the crew when you are ready to execute.
+        Your Dubbadhu thinking desk. Stay in one thread. Delegate jobs when you are ready to execute. Threads
+        older than 7 days are removed unless you long-press and keep them.
       </Text>
       <Pressable
         style={({ pressed }) => [styles.newBtn, pressed && styles.pressed, creating && styles.disabled]}
@@ -125,10 +173,16 @@ export default function ObsidianScreen({ navigation }: Props) {
             onPress={() =>
               navigation.navigate('ObsidianThread', { threadId: thread.id, title: thread.title })
             }
+            onLongPress={() => onLongPressKeep(thread)}
+            delayLongPress={400}
+            accessibilityHint="Long press to keep or un-keep this thread"
           >
-            <Text style={styles.rowTitle} numberOfLines={2}>
-              {thread.title || 'New thread'}
-            </Text>
+            <View style={styles.rowTitleLine}>
+              <Text style={styles.rowTitle} numberOfLines={2}>
+                {thread.title || 'New thread'}
+              </Text>
+              {thread.keep ? <Text style={styles.keepBadge}>Keep</Text> : null}
+            </View>
             <Text style={styles.rowMeta}>{formatWhen(thread.updated_at)}</Text>
           </Pressable>
         ))
@@ -181,10 +235,26 @@ const styles = StyleSheet.create({
     padding: 14,
     gap: 4,
   },
+  rowTitleLine: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
   rowTitle: {
+    flex: 1,
     color: '#ffffff',
     fontSize: 16,
     fontWeight: '700',
+  },
+  keepBadge: {
+    color: '#111111',
+    backgroundColor: ADMIN_ACCENT_GOLD,
+    fontSize: 10,
+    fontWeight: '800',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    overflow: 'hidden',
   },
   rowMeta: {
     color: '#6b7280',

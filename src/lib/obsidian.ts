@@ -16,7 +16,11 @@ export type ObsidianThread = {
   created_by: string | null
   created_at: string
   updated_at: string
+  keep: boolean
+  kept_at: string | null
 }
+
+const THREAD_COLUMNS = 'id, title, created_by, created_at, updated_at, keep, kept_at'
 
 export type ObsidianMessage = {
   id: string
@@ -74,7 +78,7 @@ export async function listObsidianThreads(): Promise<{
 }> {
   const { data, error } = await supabase
     .from('obsidian_threads')
-    .select('id, title, created_by, created_at, updated_at')
+    .select(THREAD_COLUMNS)
     .order('updated_at', { ascending: false })
   if (error) return { data: null, error: error.message }
   return { data: (data ?? []) as ObsidianThread[], error: null }
@@ -87,7 +91,7 @@ export async function createObsidianThread(title = 'New thread'): Promise<{
   const { data, error } = await supabase
     .from('obsidian_threads')
     .insert({ title })
-    .select('id, title, created_by, created_at, updated_at')
+    .select(THREAD_COLUMNS)
     .single()
   if (error) return { data: null, error: error.message }
   return { data: data as ObsidianThread, error: null }
@@ -229,6 +233,23 @@ export function applyRealtimeMessage(
     return existing.filter((row) => row.id !== message.id)
   }
   return mergeMessages(existing, [message])
+}
+
+export async function setObsidianThreadKeep(
+  threadId: string,
+  keep: boolean,
+): Promise<{ data: Pick<ObsidianThread, 'id' | 'keep' | 'kept_at'> | null; error: string | null }> {
+  const patch = keep
+    ? { keep: true, kept_at: new Date().toISOString() }
+    : { keep: false, kept_at: null }
+  const { data, error } = await supabase
+    .from('obsidian_threads')
+    .update(patch)
+    .eq('id', threadId)
+    .select('id, keep, kept_at')
+    .single()
+  if (error) return { data: null, error: error.message }
+  return { data: data as Pick<ObsidianThread, 'id' | 'keep' | 'kept_at'>, error: null }
 }
 
 export async function updateObsidianThreadTitle(
