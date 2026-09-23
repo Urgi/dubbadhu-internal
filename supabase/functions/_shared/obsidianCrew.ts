@@ -1,11 +1,11 @@
 import { CREW_ROUTES, type AceRoute } from './obsidian.ts'
 
 export const CREW_HANDLES: Record<AceRoute, { name: string; handles: string }> = {
-  ace: { name: 'Ace', handles: 'Engineering: Cursor, git, EAS, deploys, schema' },
-  moti: { name: 'Moti', handles: 'Afaan Oromo language, lesson copy, cultural review' },
-  jack: { name: 'Jack', handles: 'Product ops, plans, and follow-through' },
-  queen: { name: 'Queen', handles: 'Social rollout, content, and community' },
-  nigus: { name: 'Nigus', handles: 'Strategy and executive decisions' },
+  ace: { name: 'Ace', handles: 'Pipeline, PM, status, and scope' },
+  moti: { name: 'Moti', handles: 'Afaan Oromo content. Professor and voice-actor review still own the lesson.' },
+  jack: { name: 'Jack', handles: 'Engineering: bugs, friends, mic, OTP, instrumentation' },
+  queen: { name: 'Queen', handles: 'Marketing and paywall framing' },
+  nigus: { name: 'Nigus', handles: 'Amharic content' },
 }
 
 export const CREW_HANDLES_BLOCK = CREW_ROUTES.map(

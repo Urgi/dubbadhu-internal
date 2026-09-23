@@ -1,7 +1,8 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
-import { requireAdmin, requireEnv, isAdminCaller, serviceClient } from '../_shared/admin.ts'
+import { requireAdmin, isAdminCaller, serviceClient } from '../_shared/admin.ts'
 import { jsonResponse, optionsResponse } from '../_shared/cors.ts'
 import { isCrewRoute, isUrgency, isUuid, titleFromMessage, type AceRoute, type Urgency } from '../_shared/obsidian.ts'
+import { resolveCrewWebhook } from '../_shared/obsidianWebhook.ts'
 import { runCrewHandoff } from '../_shared/runCrewHandoff.ts'
 
 type HandoffBody = {
@@ -26,9 +27,6 @@ Deno.serve(async (req) => {
 
   const admin = await requireAdmin(req)
   if (!isAdminCaller(admin)) return admin
-
-  const webhookKey = requireEnv('ACE_WEBHOOK_KEY')
-  if (webhookKey instanceof Response) return webhookKey
 
   let body: HandoffBody
   try {
@@ -59,6 +57,12 @@ Deno.serve(async (req) => {
     )
   }
   const route: AceRoute = requestedRoute
+  const webhook = resolveCrewWebhook(route, {
+    JACK_WEBHOOK_URL: Deno.env.get('JACK_WEBHOOK_URL') ?? '',
+    JACK_WEBHOOK_KEY: Deno.env.get('JACK_WEBHOOK_KEY') ?? '',
+    ACE_WEBHOOK_KEY: Deno.env.get('ACE_WEBHOOK_KEY') ?? '',
+  })
+  if (!webhook.ok) return jsonResponse({ ok: false, error: webhook.error }, 500)
 
   const requestedUrgency = String(body.urgency ?? 'normal').trim() || 'normal'
   if (!isUrgency(requestedUrgency)) {
@@ -102,7 +106,8 @@ Deno.serve(async (req) => {
     threadId,
     route,
     content,
-    webhookKey,
+    webhookUrl: webhook.target.url,
+    webhookKey: webhook.target.key,
     urgency,
     goal: String(body.goal ?? '').trim(),
     context: String(body.context ?? '').trim(),

@@ -9,27 +9,27 @@ export const OBSIDIAN_CREW: Record<
 > = {
   ace: {
     name: 'Ace',
-    handles: 'Engineering: Cursor, git, EAS, deploys, schema',
+    handles: 'Pipeline, PM, status, and scope',
     color: ADMIN_ACCENT_GOLD,
   },
   moti: {
     name: 'Moti',
-    handles: 'Afaan Oromo language, lesson copy, cultural review',
+    handles: 'Afaan Oromo content. Professor and voice-actor review still own the lesson.',
     color: '#f9a8d4',
   },
   jack: {
     name: 'Jack',
-    handles: 'Product ops, plans, and follow-through',
+    handles: 'Engineering: bugs, friends, mic, OTP, instrumentation',
     color: '#86efac',
   },
   queen: {
     name: 'Queen',
-    handles: 'Social rollout, content, and community',
+    handles: 'Marketing and paywall framing',
     color: '#c4b5fd',
   },
   nigus: {
     name: 'Nigus',
-    handles: 'Strategy and executive decisions',
+    handles: 'Amharic content',
     color: '#fdba74',
   },
 }

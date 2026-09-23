@@ -358,19 +358,20 @@ export default function ObsidianThreadScreen({ navigation, route }: Props) {
                       <Pressable style={styles.chipAction} onPress={() => navigation.navigate('AdminAnalytics')}>
                         <Text style={styles.chipActionText}>View activity</Text>
                       </Pressable>
-                    ) : (
-                      <Pressable
-                        style={styles.chipAction}
-                        onPress={() => setDraft(`Explore further:\n${row.content.slice(0, 280)}`)}
-                      >
-                        <Text style={styles.chipActionText}>Explore further</Text>
-                      </Pressable>
-                    )}
+                    ) : null}
                     <Pressable
                       style={styles.chipAction}
-                      onPress={() => setDraft('Ask a follow-up on the last answer.')}
+                      onPress={() =>
+                        setDraft(`Explain the pattern in the last answer:\n${row.content.slice(0, 280)}`)
+                      }
                     >
-                      <Text style={styles.chipActionText}>Ask follow-up</Text>
+                      <Text style={styles.chipActionText}>Explain pattern</Text>
+                    </Pressable>
+                    <Pressable
+                      style={styles.chipAction}
+                      onPress={() => setDraft('Recommend the next step from the last answer.')}
+                    >
+                      <Text style={styles.chipActionText}>Recommend next</Text>
                     </Pressable>
                   </View>
                 ) : null}

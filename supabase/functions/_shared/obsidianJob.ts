@@ -1,4 +1,4 @@
-import { CREW_HANDLES } from './obsidianCrew.ts'
+import { CREW_HANDLES, CREW_HANDLES_BLOCK } from './obsidianCrew.ts'
 import { isCrewRoute, type AceRoute } from './obsidian.ts'
 
 export const OBS_JOB_PREFIX = 'OBS_JOB:'
@@ -72,4 +72,7 @@ export function workingNote(route: AceRoute): string {
 
 export const JOB_DRAFT_SYSTEM = `Convert the Obsidian thread into a job draft. Reply with JSON only:
 {"assignedAgentId":"ace"|"moti"|"jack"|"queen"|"nigus","objective":"clear outcome","deliverable":"what should be returned","contextSummary":"short thread context","priority":"low"|"normal"|"high"|"urgent"}
-Keep fields concise. Do not invent facts missing from the thread.`
+Crew:
+${CREW_HANDLES_BLOCK}
+Unnamed execution defaults to ace. Bugs, friends, mic, OTP, and instrumentation go to jack.
+Keep fields concise. Do not invent facts missing from the thread. Do not assign language truth.`
