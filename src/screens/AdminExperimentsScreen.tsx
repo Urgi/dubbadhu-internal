@@ -65,23 +65,42 @@ function ExperimentCard({
           <Text style={styles.experimentKey}>{experiment.key}</Text>
           <Text style={styles.cardTitle}>{experiment.title}</Text>
         </View>
-        <View style={styles.toggleWrap}>
-          <Text style={[styles.toggleLabel, enabled && styles.toggleLabelOn]}>
-            {enabled ? 'On' : 'Off'}
+        {experiment.flagColumn ? (
+          <View style={styles.toggleWrap}>
+            <Text style={[styles.toggleLabel, enabled && styles.toggleLabelOn]}>
+              {enabled ? 'On' : 'Off'}
+            </Text>
+            <Switch
+              value={enabled}
+              onValueChange={onToggle}
+              disabled={saving || flag == null}
+              trackColor={{ true: ADMIN_ACCENT_GOLD, false: '#3a3a3c' }}
+              accessibilityLabel={`${experiment.key} enabled`}
+            />
+          </View>
+        ) : (
+          <Text
+            style={[
+              styles.alwaysOn,
+              experiment.running === false && styles.heldLabel,
+            ]}
+          >
+            {experiment.running === false ? 'Held' : 'Live'}
           </Text>
-          <Switch
-            value={enabled}
-            onValueChange={onToggle}
-            disabled={saving || flag == null}
-            trackColor={{ true: ADMIN_ACCENT_GOLD, false: '#3a3a3c' }}
-            accessibilityLabel={`${experiment.key} enabled`}
-          />
-        </View>
+        )}
       </View>
 
       {flag?.updatedAt ? (
         <Text style={styles.flagMeta}>Saved {new Date(flag.updatedAt).toLocaleDateString()}</Text>
       ) : null}
+
+      <Text style={styles.sectionLabel}>Threshold</Text>
+      <Text style={styles.thresholdLine}>
+        Metric · {experiment.metric}
+      </Text>
+      <Text style={styles.thresholdLine}>Keep · {experiment.keep}</Text>
+      <Text style={styles.thresholdKill}>Kill · {experiment.kill}</Text>
+      <Text style={styles.thresholdLine}>Call · {experiment.callAfter}</Text>
 
       <Text style={styles.sectionLabel}>Results</Text>
       <View style={styles.timeFilter}>
@@ -155,7 +174,9 @@ export default function AdminExperimentsScreen({ navigation }: Props) {
     await Promise.all(
       KNOWN_EXPERIMENTS.map(async (experiment) => {
         const [flagRes, resultsRes] = await Promise.all([
-          fetchExperimentFlag(supabase, experiment.flagColumn),
+          experiment.flagColumn
+            ? fetchExperimentFlag(supabase, experiment.flagColumn)
+            : Promise.resolve({ enabled: true, updatedAt: null, error: null as string | null }),
           fetchExperimentResults(supabase, experiment, range),
         ])
         if (flagRes.error) errs.push(`${experiment.key} flag: ${flagRes.error}`)
@@ -203,6 +224,7 @@ export default function AdminExperimentsScreen({ navigation }: Props) {
   }, [load])
 
   const onToggle = useCallback((experiment: KnownExperiment, next: boolean) => {
+    if (!experiment.flagColumn) return
     const verb = next ? 'Turn on' : 'Turn off'
     Alert.alert(
       `${verb} ${experiment.key}?`,
@@ -312,7 +334,11 @@ const styles = StyleSheet.create({
   toggleWrap: { alignItems: 'flex-end', gap: 4 },
   toggleLabel: { color: '#8e8e93', fontSize: 12, fontWeight: '700' },
   toggleLabelOn: { color: ADMIN_ACCENT_GOLD },
+  alwaysOn: { color: ADMIN_ACCENT_GOLD, fontSize: 12, fontWeight: '700', marginTop: 4 },
+  heldLabel: { color: '#8e8e93' },
   flagMeta: { color: '#6b7280', fontSize: 12, marginTop: 2 },
+  thresholdLine: { color: '#d1d5db', fontSize: 13, lineHeight: 18, marginTop: 4 },
+  thresholdKill: { color: '#fca5a5', fontSize: 13, lineHeight: 18, marginTop: 4 },
   sectionLabel: {
     fontSize: 10,
     fontWeight: '700',

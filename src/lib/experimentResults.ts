@@ -69,7 +69,17 @@ export function eventExperimentKey(properties: Record<string, unknown> | null): 
   return strProp(properties, 'experiment_key', 'experiment_id')
 }
 
-export function eventArm(properties: Record<string, unknown> | null): string {
+export function eventArm(
+  properties: Record<string, unknown> | null,
+  experimentKey?: string,
+): string {
+  const key = experimentKey || eventExperimentKey(properties)
+  if (key === 'mic_skip_v1') return strProp(properties, 'mic_skip_arm')
+  if (key === 'timed_comments_v1') return strProp(properties, 'timed_comments_arm')
+  if (key === 'series_intro_translation_v1') {
+    return strProp(properties, 'series_intro_arm', 'intro_variant', 'arm', 'variant')
+  }
+  if (key === 'paywall_free_n_v1') return strProp(properties, 'arm')
   return strProp(properties, 'arm', 'variant', 'bucket')
 }
 
@@ -150,7 +160,7 @@ export function aggregateExperimentResults(
     if (!uid || excludedUserIds.has(uid) || isAnalyticsExcludedUserId(uid)) continue
     if (!isExposureEvent(row.event_name)) continue
     if (eventExperimentKey(row.properties) !== experiment.key) continue
-    const arm = eventArm(row.properties)
+    const arm = eventArm(row.properties, experiment.key)
     if (!arm) continue
     if (row.event_name === 'experiment_exposed') exposureName = 'experiment_exposed'
     else if (exposureName !== 'experiment_exposed') exposureName = row.event_name
@@ -330,6 +340,9 @@ export async function fetchExperimentFlag(
   client: SupabaseClient,
   flagColumn: KnownExperiment['flagColumn'],
 ): Promise<{ enabled: boolean; updatedAt: string | null; error: string | null }> {
+  if (!flagColumn) {
+    return { enabled: true, updatedAt: null, error: null }
+  }
   const { data, error } = await client
     .from('app_config')
     .select(`${flagColumn}, updated_at`)
@@ -350,6 +363,7 @@ export async function upsertExperimentFlag(
   flagColumn: KnownExperiment['flagColumn'],
   enabled: boolean,
 ): Promise<{ error: string | null }> {
+  if (!flagColumn) return { error: 'This experiment has no kill switch' }
   const { error } = await client.from('app_config').upsert(
     {
       id: APP_CONFIG_ROW_ID,
