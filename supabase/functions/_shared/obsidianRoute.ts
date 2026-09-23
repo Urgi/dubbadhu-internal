@@ -7,10 +7,11 @@ export type ObsidianSendDecision =
 
 export const OBSIDIAN_ROUTE_SYSTEM = `You route Obsidian desk messages. Reply with JSON only.
 {"action":"chat"} if Obsidian can think, draft, explain, plan, answer from product facts, or look up data with SQL.
-{"action":"handoff","route":"ace"|"moti"|"jack"|"queen"|"nigus"} only when the user wants a specialized agent to execute work.
-Analytics lookups stay chat. Counts, retention, funnels, and "how many" are not jobs, even if they mention OTP, mic, or friends.
-Engineering execution goes to jack: bugs, broken mic, OTP failures to fix, friends-invite bugs, instrumentation.
-Unnamed "assign this" stays ace. Afaan content execution is moti. Amharic content execution is nigus. Marketing and paywall framing is queen.
+{"action":"handoff","route":"ace"|"moti"|"jack"|"queen"|"nigus"} when a specialized agent should execute or dig into work Obsidian cannot see.
+Analytics lookups stay chat. Counts, retention, funnels, and "how many" are not jobs, even if they mention OTP, mic, friends, schedule, or product.
+Jack: repo or code clarity (how it is implemented, read the codebase), plus eng bugs (mic, OTP, friends invite, instrumentation).
+Ace: scheduling, product planning, pipeline, PM, status, and scope. Not analytics lookups.
+Unnamed "assign this" stays ace. Afaan content is moti. Amharic content is nigus. Marketing and paywall framing is queen.
 Do not hand off a lookup. Do not invent language truth.
 Crew:
 ${CREW_HANDLES_BLOCK}`
@@ -44,6 +45,12 @@ const JACK_DOMAIN =
 const JACK_EXECUTE =
   /\b(bug|crash|broken|regression|debug|fix|instrument|not working|doesn'?t work|failing)\b/i
 
+const JACK_REPO =
+  /\b(codebase|source code|github|repo|repository|in the code|from the code|look at the code|read the code|how (?:is|does|do).{0,80}implement|implementation of|where in (?:the )?(?:code|repo|codebase))\b/i
+
+const ACE_PRODUCT =
+  /\b(schedul(?:e|ing)|roadmap|priorit(?:y|ies|ize|ise)|product (?:plan|planning|decision|call|scope)|what should we (?:ship|build|do next)|pipeline status|scope (?:this|for)|pm (?:call|decision)|release plan)\b/i
+
 export function explicitCrewRoute(text: string): AceRoute | null {
   const t = text.toLowerCase()
   for (const route of CREW_ROUTES) {
@@ -72,6 +79,14 @@ function looksLikeJackEngJob(text: string): boolean {
   return JACK_DOMAIN.test(text) && JACK_EXECUTE.test(text)
 }
 
+function looksLikeJackRepoJob(text: string): boolean {
+  return JACK_REPO.test(text)
+}
+
+function looksLikeAceProductJob(text: string): boolean {
+  return ACE_PRODUCT.test(text)
+}
+
 function wantsUnnamedJob(text: string): boolean {
   return UNNAMED_JOB.test(text.toLowerCase())
 }
@@ -82,8 +97,11 @@ export function resolveObsidianSendDecision(
 ): ObsidianSendDecision {
   const mentioned = explicitCrewRoute(content)
   if (mentioned) return { action: 'handoff', route: mentioned }
+  if (looksLikeJackRepoJob(content) || looksLikeJackEngJob(content)) {
+    return { action: 'handoff', route: 'jack' }
+  }
+  if (looksLikeAceProductJob(content)) return { action: 'handoff', route: 'ace' }
   if (isAnalyticsLookup(content)) return { action: 'chat' }
-  if (looksLikeJackEngJob(content)) return { action: 'handoff', route: 'jack' }
   if (model?.action === 'handoff' && model.route === 'jack') return { action: 'chat' }
   if (model) return model
   if (wantsUnnamedJob(content)) return { action: 'handoff', route: 'ace' }

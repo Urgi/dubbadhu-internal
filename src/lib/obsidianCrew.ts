@@ -9,7 +9,7 @@ export const OBSIDIAN_CREW: Record<
 > = {
   ace: {
     name: 'Ace',
-    handles: 'Pipeline, PM, status, and scope',
+    handles: 'Pipeline, PM, status, scope, scheduling, and product planning',
     color: ADMIN_ACCENT_GOLD,
   },
   moti: {
@@ -19,7 +19,7 @@ export const OBSIDIAN_CREW: Record<
   },
   jack: {
     name: 'Jack',
-    handles: 'Engineering: bugs, friends, mic, OTP, instrumentation',
+    handles: 'Engineering: repo/code clarity, bugs, friends, mic, OTP, instrumentation',
     color: '#86efac',
   },
   queen: {

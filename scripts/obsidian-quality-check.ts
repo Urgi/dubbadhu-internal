@@ -88,6 +88,26 @@ assert.deepEqual(
 )
 
 assert.deepEqual(
+  resolveObsidianSendDecision('how is friends invite implemented in the codebase?', { action: 'chat' }),
+  { action: 'handoff', route: 'jack' },
+)
+
+assert.deepEqual(
+  resolveObsidianSendDecision('look at the code and explain OTP', { action: 'handoff', route: 'ace' }),
+  { action: 'handoff', route: 'jack' },
+)
+
+assert.deepEqual(
+  resolveObsidianSendDecision('help me prioritize the product roadmap this week', { action: 'chat' }),
+  { action: 'handoff', route: 'ace' },
+)
+
+assert.deepEqual(
+  resolveObsidianSendDecision('what should we schedule for the next release', null),
+  { action: 'handoff', route: 'ace' },
+)
+
+assert.deepEqual(
   resolveCrewWebhook('jack', {
     JACK_WEBHOOK_URL: 'https://jack.example/hook',
     JACK_WEBHOOK_KEY: 'secret',

@@ -74,5 +74,5 @@ export const JOB_DRAFT_SYSTEM = `Convert the Obsidian thread into a job draft. R
 {"assignedAgentId":"ace"|"moti"|"jack"|"queen"|"nigus","objective":"clear outcome","deliverable":"what should be returned","contextSummary":"short thread context","priority":"low"|"normal"|"high"|"urgent"}
 Crew:
 ${CREW_HANDLES_BLOCK}
-Unnamed execution defaults to ace. Bugs, friends, mic, OTP, and instrumentation go to jack.
+Unnamed execution defaults to ace. Repo/code clarity, bugs, friends, mic, OTP, and instrumentation go to jack. Scheduling and product planning go to ace.
 Keep fields concise. Do not invent facts missing from the thread. Do not assign language truth.`
