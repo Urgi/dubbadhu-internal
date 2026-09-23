@@ -4,6 +4,9 @@ import { APP_CONFIG_ROW_ID, type KnownExperiment } from './experiments'
 
 export type ExperimentDateRange = '7d' | '30d' | 'all'
 
+/** Same buckets as Admin Analytics: +251 is ET; everyone else, including a missing phone, is NET. */
+export type ExperimentCountryScope = 'all' | 'non_et' | 'et'
+
 export type ExperimentEventRow = {
   user_id: string | null
   event_name: string
@@ -45,6 +48,20 @@ const FUNNEL_EVENT_NAMES = ['lesson_completed', 'paywall_viewed', 'premium_purch
 const FETCH_EVENT_NAMES = [...EXPERIMENT_EXPOSURE_EVENT_NAMES, ...FUNNEL_EVENT_NAMES]
 
 const EXPOSURE_NAME_SET = new Set<string>(EXPERIMENT_EXPOSURE_EVENT_NAMES)
+
+export function phoneIsEthiopia(phone: string | null | undefined): boolean {
+  const digits = String(phone ?? '').replace(/\D/g, '')
+  return digits.startsWith('251')
+}
+
+export function userMatchesExperimentCountry(
+  phone: string | null | undefined,
+  scope: ExperimentCountryScope,
+): boolean {
+  if (scope === 'all') return true
+  const et = phoneIsEthiopia(phone)
+  return scope === 'et' ? et : !et
+}
 
 export function sinceIsoForRange(range: ExperimentDateRange, nowMs = Date.now()): string | null {
   if (range === 'all') return null
@@ -140,6 +157,10 @@ export function aggregateExperimentResults(
   range: ExperimentDateRange,
   nowMs = Date.now(),
   truncated = false,
+  country: {
+    scope?: ExperimentCountryScope
+    phoneByUserId?: Map<string, string | null>
+  } = {},
 ): ExperimentResults {
   const result = emptyResults(experiment, range, nowMs)
   const labelByArm = new Map(experiment.arms.map((a) => [a.id, a.label]))
@@ -154,10 +175,18 @@ export function aggregateExperimentResults(
 
   const assignment = new Map<string, { arm: string; exposedAt: string }>()
   let exposureName = 'experiment_exposed'
+  const scope = country.scope === 'et' || country.scope === 'non_et' ? country.scope : 'all'
+  const phoneByUserId = country.phoneByUserId
 
   for (const row of sorted) {
     const uid = row.user_id == null ? '' : String(row.user_id)
     if (!uid || excludedUserIds.has(uid) || isAnalyticsExcludedUserId(uid)) continue
+    if (
+      scope !== 'all' &&
+      !userMatchesExperimentCountry(phoneByUserId?.get(uid) ?? '', scope)
+    ) {
+      continue
+    }
     if (!isExposureEvent(row.event_name)) continue
     if (eventExperimentKey(row.properties) !== experiment.key) continue
     const arm = eventArm(row.properties, experiment.key)
@@ -308,19 +337,50 @@ async function fetchEventsViaAdminRpc(
   return { data: rows, error: null, truncated: offset >= FETCH_CAP }
 }
 
+async function fetchPhonesByUserId(
+  client: SupabaseClient,
+  userIds: string[],
+): Promise<{ phones: Map<string, string | null>; error: string | null }> {
+  const phones = new Map<string, string | null>()
+  const unique = [...new Set(userIds.map((id) => String(id || '').trim()).filter(Boolean))]
+  const chunkSize = 150
+  for (let i = 0; i < unique.length; i += chunkSize) {
+    const chunk = unique.slice(i, i + chunkSize)
+    const { data, error } = await client.from('users').select('id, phone').in('id', chunk)
+    if (error) return { phones, error: error.message }
+    for (const row of (data ?? []) as Array<{ id?: string; phone?: string | null }>) {
+      if (!row?.id) continue
+      phones.set(String(row.id), row.phone == null ? '' : String(row.phone))
+    }
+  }
+  return { phones, error: null }
+}
+
 export async function fetchExperimentResults(
   client: SupabaseClient,
   experiment: KnownExperiment,
   range: ExperimentDateRange,
+  countryScope: ExperimentCountryScope = 'all',
 ): Promise<{ data: ExperimentResults; error: string | null }> {
   const nowMs = Date.now()
   const sinceIso = sinceIsoForRange(range, nowMs)
+  const scope = countryScope === 'et' || countryScope === 'non_et' ? countryScope : 'all'
   const excluded = await fetchDbExcludedUserIds(client)
 
   const direct = await fetchEventsDirect(client, sinceIso)
   const fetched = direct.error ? await fetchEventsViaAdminRpc(client, sinceIso) : direct
   if (fetched.error && fetched.data.length === 0) {
     return { data: emptyResults(experiment, range, nowMs), error: fetched.error }
+  }
+
+  let phoneByUserId: Map<string, string | null> | undefined
+  if (scope !== 'all') {
+    const userIds = fetched.data.map((row) => (row.user_id == null ? '' : String(row.user_id)))
+    const phones = await fetchPhonesByUserId(client, userIds)
+    if (phones.error) {
+      return { data: emptyResults(experiment, range, nowMs), error: phones.error }
+    }
+    phoneByUserId = phones.phones
   }
 
   return {
@@ -331,6 +391,7 @@ export async function fetchExperimentResults(
       range,
       nowMs,
       fetched.truncated,
+      { scope, phoneByUserId },
     ),
     error: fetched.error,
   }

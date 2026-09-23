@@ -1,6 +1,7 @@
 /** Learner-app reliability signals we treat as crashes / hiccups in admin analytics. */
 export const RELIABILITY_EVENT_NAMES = new Set([
   'component_error',
+  'critical_issue_alert',
   'lesson_remote_load_failed',
   'practice_feedback_error',
   'signin_failed',
@@ -24,6 +25,8 @@ export type ReliabilityEventRow = {
 export type Reliability24hSummary = {
   total: number
   uniqueUsers: number
+  /** Issue rows with no users id (signup / sign-in before an account). */
+  anonymous: number
   byEventName: { event_name: string; count: number }[]
   recent: {
     event_name: string
@@ -67,9 +70,11 @@ export function summarizeReliabilityEvents24h(rows: ReliabilityEventRow[]): Reli
   const reliability = rows.filter((r) => isReliabilityAnalyticsEvent(r.event_name))
   const counts = new Map<string, number>()
   const users = new Set<string>()
+  let anonymous = 0
   for (const row of reliability) {
     counts.set(row.event_name, (counts.get(row.event_name) ?? 0) + 1)
     if (row.user_id) users.add(row.user_id)
+    else anonymous += 1
   }
   const byEventName = Array.from(counts.entries())
     .map(([event_name, count]) => ({ event_name, count }))
@@ -85,6 +90,7 @@ export function summarizeReliabilityEvents24h(rows: ReliabilityEventRow[]): Reli
   return {
     total: reliability.length,
     uniqueUsers: users.size,
+    anonymous,
     byEventName,
     recent,
   }
@@ -96,7 +102,7 @@ export function formatReliability24hSummaryForPrompt(summary: Reliability24hSumm
     return 'Last 24 hours: no component_error or other reliability events in the loaded window.'
   }
   const lines = [
-    `Last 24 hours reliability snapshot: ${summary.total} event(s), ${summary.uniqueUsers} unique user(s).`,
+    `Last 24 hours reliability snapshot: ${summary.total} event(s), ${summary.uniqueUsers} unique user(s), ${summary.anonymous} with no account.`,
     'Counts by event_name:',
     ...summary.byEventName.map((r) => `- ${r.event_name}: ${r.count}`),
   ]

@@ -454,6 +454,12 @@ export default function AdminAnalyticsScreen({ navigation }: Props) {
                 <Text style={styles.healthStatValue}>{reliability24h.uniqueUsers}</Text>
                 <Text style={styles.healthStatLabel}>Users affected</Text>
               </View>
+              {reliability24h.anonymous > 0 ? (
+                <View style={styles.healthStat}>
+                  <Text style={styles.healthStatValue}>{reliability24h.anonymous}</Text>
+                  <Text style={styles.healthStatLabel}>No account</Text>
+                </View>
+              ) : null}
             </View>
             {reliability24h.byEventName.map((row) => (
               <View key={row.event_name} style={styles.healthCountRow}>

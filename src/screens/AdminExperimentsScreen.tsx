@@ -18,6 +18,7 @@ import {
   fetchExperimentFlag,
   fetchExperimentResults,
   upsertExperimentFlag,
+  type ExperimentCountryScope,
   type ExperimentDateRange,
   type ExperimentResults,
 } from '../lib/experimentResults'
@@ -162,6 +163,7 @@ export default function AdminExperimentsScreen({ navigation }: Props) {
   const [refreshing, setRefreshing] = useState(false)
   const [savingKey, setSavingKey] = useState<string | null>(null)
   const [range, setRange] = useState<ExperimentDateRange>('30d')
+  const [countryScope, setCountryScope] = useState<ExperimentCountryScope>('all')
   const [flags, setFlags] = useState<Record<string, FlagState>>({})
   const [resultsByKey, setResultsByKey] = useState<Record<string, ExperimentResults>>({})
   const [error, setError] = useState('')
@@ -177,7 +179,7 @@ export default function AdminExperimentsScreen({ navigation }: Props) {
           experiment.flagColumn
             ? fetchExperimentFlag(supabase, experiment.flagColumn)
             : Promise.resolve({ enabled: true, updatedAt: null, error: null as string | null }),
-          fetchExperimentResults(supabase, experiment, range),
+          fetchExperimentResults(supabase, experiment, range, countryScope),
         ])
         if (flagRes.error) errs.push(`${experiment.key} flag: ${flagRes.error}`)
         nextFlags[experiment.key] = {
@@ -192,7 +194,7 @@ export default function AdminExperimentsScreen({ navigation }: Props) {
     setFlags(nextFlags)
     setResultsByKey(nextResults)
     setError(errs.join('\n'))
-  }, [range])
+  }, [countryScope, range])
 
   useFocusEffect(
     useCallback(() => {
@@ -282,6 +284,37 @@ export default function AdminExperimentsScreen({ navigation }: Props) {
     >
       {error ? <Text style={styles.errorBanner}>{error}</Text> : null}
 
+      <View style={styles.timeFilter}>
+        {(
+          [
+            { key: 'all' as const, label: 'ALL' },
+            { key: 'non_et' as const, label: 'NET' },
+            { key: 'et' as const, label: 'ET' },
+          ] as const
+        ).map(({ key, label }) => (
+          <Pressable
+            key={key}
+            onPress={() => setCountryScope(key)}
+            style={[styles.tfBtn, countryScope === key && styles.tfBtnActive]}
+            hitSlop={4}
+            accessibilityRole="button"
+            accessibilityState={{ selected: countryScope === key }}
+            accessibilityLabel={`Show ${label} experiment results`}
+          >
+            <Text style={[styles.tfBtnText, countryScope === key && styles.tfBtnTextActive]}>
+              {label}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+      <Text style={styles.countryHint}>
+        {countryScope === 'et'
+          ? 'Ethiopia only (+251).'
+          : countryScope === 'non_et'
+            ? 'Everyone except +251. Missing phones count here.'
+            : 'All learners.'}
+      </Text>
+
       {KNOWN_EXPERIMENTS.map((experiment) => (
         <ExperimentCard
           key={experiment.key}
@@ -308,6 +341,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   errorBanner: { color: '#f87171', marginBottom: 12, fontSize: 14 },
+  countryHint: { color: '#6b7280', fontSize: 12, lineHeight: 16, marginTop: 8, marginBottom: 14 },
   card: {
     backgroundColor: CARD_BG,
     borderRadius: 14,
