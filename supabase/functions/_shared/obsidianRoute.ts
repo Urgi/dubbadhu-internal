@@ -8,9 +8,9 @@ export type ObsidianSendDecision =
 export const OBSIDIAN_ROUTE_SYSTEM = `You route Obsidian desk messages. Reply with JSON only.
 {"action":"chat"} if Obsidian can think, draft, explain, plan, answer from product facts, or look up data with SQL.
 {"action":"handoff","route":"ace"|"moti"|"jack"|"queen"|"nigus"} when a specialized agent should execute or dig into work Obsidian cannot see.
-Analytics lookups stay chat. Counts, retention, funnels, and "how many" are not jobs, even if they mention OTP, mic, friends, schedule, or product.
+Analytics and data follow-ups stay chat. Counts, retention, funnels, "how many", "give me the user", "who submitted", and other SQL lookups are not jobs.
 Jack: repo or code clarity (how it is implemented, read the codebase), plus eng bugs (mic, OTP, friends invite, instrumentation).
-Ace: scheduling, product planning, pipeline, PM, status, and scope. Not analytics lookups.
+Ace: scheduling, product planning, pipeline, PM, status, and scope. Not analytics or sentence/user lookups.
 Unnamed "assign this" stays ace. Afaan content is moti. Amharic content is nigus. Marketing and paywall framing is queen.
 Do not hand off a lookup. Do not invent language truth.
 Crew:
@@ -38,6 +38,9 @@ const UNNAMED_JOB =
 
 const ANALYTICS_LOOKUP =
   /\b(how many|how much|count of|number of|retention|funnel|conversion|cohort|breakdown|percent|percentage|what(?:'s| is) the (?:rate|number|count)|last \d+ days|over the last|this week|analytics)\b/i
+
+const DATA_FOLLOWUP =
+  /\b(give me the user|who submitted|who wrote|which user|find the user|user of (?:the )?sentence|author of|look up (?:the )?user|show (?:me )?(?:the )?user|sentence user)\b/i
 
 const JACK_DOMAIN =
   /\b(friends?(?:\s+invite)?|not_found|microphone|\bmic\b|otp|one-time password|instrumentation|signin_failed)\b/i
@@ -72,7 +75,7 @@ export function explicitCrewRoute(text: string): AceRoute | null {
 }
 
 export function isAnalyticsLookup(text: string): boolean {
-  return ANALYTICS_LOOKUP.test(text)
+  return ANALYTICS_LOOKUP.test(text) || DATA_FOLLOWUP.test(text)
 }
 
 function looksLikeJackEngJob(text: string): boolean {
@@ -91,6 +94,14 @@ function wantsUnnamedJob(text: string): boolean {
   return UNNAMED_JOB.test(text.toLowerCase())
 }
 
+function modelHandoffIsTrusted(model: Extract<ObsidianSendDecision, { action: 'handoff' }>, content: string): boolean {
+  if (model.route === 'moti' || model.route === 'nigus' || model.route === 'queen') return true
+  if (wantsUnnamedJob(content)) return true
+  if (model.route === 'ace' && looksLikeAceProductJob(content)) return true
+  if (model.route === 'jack' && (looksLikeJackRepoJob(content) || looksLikeJackEngJob(content))) return true
+  return false
+}
+
 export function resolveObsidianSendDecision(
   content: string,
   model: ObsidianSendDecision | null,
@@ -102,7 +113,9 @@ export function resolveObsidianSendDecision(
   }
   if (looksLikeAceProductJob(content)) return { action: 'handoff', route: 'ace' }
   if (isAnalyticsLookup(content)) return { action: 'chat' }
-  if (model?.action === 'handoff' && model.route === 'jack') return { action: 'chat' }
+  if (model?.action === 'handoff') {
+    return modelHandoffIsTrusted(model, content) ? model : { action: 'chat' }
+  }
   if (model) return model
   if (wantsUnnamedJob(content)) return { action: 'handoff', route: 'ace' }
   return { action: 'chat' }

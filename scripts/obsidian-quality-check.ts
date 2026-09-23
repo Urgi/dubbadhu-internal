@@ -108,6 +108,19 @@ assert.deepEqual(
 )
 
 assert.deepEqual(
+  resolveObsidianSendDecision('Give me the user of the sentence as well.', {
+    action: 'handoff',
+    route: 'ace',
+  }),
+  { action: 'chat' },
+)
+
+assert.deepEqual(
+  resolveObsidianSendDecision('who submitted that sentence', { action: 'handoff', route: 'jack' }),
+  { action: 'chat' },
+)
+
+assert.deepEqual(
   resolveCrewWebhook('jack', {
     JACK_WEBHOOK_URL: 'https://jack.example/hook',
     JACK_WEBHOOK_KEY: 'secret',

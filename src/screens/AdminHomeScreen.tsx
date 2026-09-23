@@ -2,6 +2,7 @@
 import { useFocusEffect } from '@react-navigation/native'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import Svg, { Path } from 'react-native-svg'
 import type { StackScreenProps } from '@react-navigation/stack'
 import { ADMIN_ACCENT_GOLD } from '../components/lesson-config/AdminLessonConfigChrome'
 import SeriesPipelineBlock from '../components/SeriesPipelineBlock'
@@ -41,6 +42,19 @@ import type { RootStackParamList } from '../types'
 type Props = StackScreenProps<RootStackParamList, 'AdminHome'>
 
 const HOME_SECTION_ORDER: AdminHomeSectionId[] = ['analytics', 'assets', 'moderation']
+
+function ObsidianHeaderIcon({ size = 22, color = ADMIN_ACCENT_GOLD }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M4 6.5C4 5.12 5.12 4 6.5 4h11C18.88 4 20 5.12 20 6.5v7c0 1.38-1.12 2.5-2.5 2.5H10l-4.2 3.15c-.5.38-1.3.02-1.3-.6V6.5Z"
+        stroke={color}
+        strokeWidth={1.8}
+        strokeLinejoin="round"
+      />
+    </Svg>
+  )
+}
 
 function SectionCard({
   section,
@@ -342,6 +356,17 @@ export default function AdminHomeScreen({ navigation }: Props) {
           <Text style={styles.headerBtnText}>Sign Out</Text>
         </Pressable>
       ),
+      headerRight: () => (
+        <Pressable
+          onPress={() => navigation.navigate('Obsidian')}
+          style={styles.headerIconBtn}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Open Obsidian"
+        >
+          <ObsidianHeaderIcon />
+        </Pressable>
+      ),
     })
   }, [navigation, onSignOut])
 
@@ -361,21 +386,6 @@ export default function AdminHomeScreen({ navigation }: Props) {
         </View>
       ) : null}
       {error ? <Text style={styles.errorBanner}>{error}</Text> : null}
-
-      <Pressable
-        style={({ pressed }) => [styles.sectionCard, pressed && styles.sectionCardPressed]}
-        onPress={() => navigation.navigate('Obsidian')}
-      >
-        <View style={styles.sectionHeaderRow}>
-          <View style={styles.sectionHeaderText}>
-            <Text style={styles.sectionTitle}>Obsidian</Text>
-            <Text style={styles.sectionSubtitle}>
-              Your thinking desk. Delegate jobs to Ace and the crew without leaving the thread.
-            </Text>
-          </View>
-          <Text style={styles.sectionChevron}>›</Text>
-        </View>
-      </Pressable>
 
       {HOME_SECTION_ORDER.map((section) => (
         <View key={section} style={section === 'analytics' ? styles.analyticsHomeStack : undefined}>
@@ -442,6 +452,11 @@ const styles = StyleSheet.create({
     color: '#ebebf5',
     fontSize: 15,
     fontWeight: '500',
+  },
+  headerIconBtn: {
+    marginRight: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
   },
   inlineRefresh: {
     alignItems: 'center',
