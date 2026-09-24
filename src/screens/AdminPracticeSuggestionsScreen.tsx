@@ -52,6 +52,8 @@ function SentencePickRow({
   readOnly,
   autoScore,
   rank,
+  onRemove,
+  removing,
 }: {
   row: PracticeCommunitySentenceRow | AutoFeedSentenceRow
   selected?: boolean
@@ -60,13 +62,15 @@ function SentencePickRow({
   readOnly?: boolean
   autoScore?: number
   rank?: number
+  onRemove?: () => void
+  removing?: boolean
 }) {
   const score = autoScore ?? ('autoScore' in row ? row.autoScore : undefined)
 
   return (
     <Pressable
-      onPress={readOnly ? undefined : onToggle}
-      disabled={readOnly || disabled}
+      onPress={readOnly && !onRemove ? undefined : onToggle}
+      disabled={(readOnly && !onRemove) || disabled || removing}
       style={({ pressed }) => [
         styles.pickRow,
         !readOnly && selected && styles.pickRowSelected,
@@ -100,6 +104,22 @@ function SentencePickRow({
           {row.is_saved ? ' · saved by user' : ' · practice attempt'}
         </Text>
       </View>
+      {onRemove ? (
+        <Pressable
+          onPress={onRemove}
+          disabled={removing}
+          hitSlop={8}
+          style={({ pressed }) => [styles.removeBtn, pressed && styles.removeBtnPressed]}
+          accessibilityRole="button"
+          accessibilityLabel="Remove from Practice feed"
+        >
+          {removing ? (
+            <ActivityIndicator size="small" color="#f87171" />
+          ) : (
+            <Text style={styles.removeBtnText}>Remove</Text>
+          )}
+        </Pressable>
+      ) : null}
     </Pressable>
   )
 }
@@ -115,6 +135,7 @@ export default function AdminPracticeSuggestionsScreen({ navigation }: Props) {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [removingId, setRemovingId] = useState<string | null>(null)
   const [error, setError] = useState('')
 
   const load = useCallback(async () => {
@@ -169,6 +190,12 @@ export default function AdminPracticeSuggestionsScreen({ navigation }: Props) {
 
   const hasSavedPicks = featuredRows.length > 0
 
+  /** What Practice shows today: curated picks if any, else the automatic top 7. */
+  const liveFeedRows = useMemo((): Array<PracticeCommunitySentenceRow | AutoFeedSentenceRow> => {
+    if (hasSavedPicks) return featuredRows
+    return autoFeedRows
+  }, [hasSavedPicks, featuredRows, autoFeedRows])
+
   const featuredScored = useMemo(
     (): ScoredRow[] => featuredRows.map((r) => withAutoScore(r)),
     [featuredRows],
@@ -203,6 +230,26 @@ export default function AdminPracticeSuggestionsScreen({ navigation }: Props) {
     Alert.alert('Saved', `Community feed updated for ${featuredDate} (${selectedIds.length} picks).`)
     await load()
   }, [featuredDate, selectedIds, load])
+
+  const removeFromLiveFeed = useCallback(
+    async (id: string | number) => {
+      const key = idKey(id)
+      const liveIds = liveFeedRows.map((r) => r.id)
+      const next = liveIds.filter((x) => idKey(x) !== key)
+      setRemovingId(key)
+      setError('')
+      const { error: err } = await savePracticeCommunityPicks(featuredDate, next)
+      setRemovingId(null)
+      if (err) {
+        setError(err)
+        return
+      }
+      setSelectedIds(next)
+      setInitialIds(next)
+      await load()
+    },
+    [featuredDate, liveFeedRows, load],
+  )
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -259,11 +306,33 @@ export default function AdminPracticeSuggestionsScreen({ navigation }: Props) {
         <Text style={styles.hint}>No word of the day for this date.</Text>
       )}
 
+      <Text style={styles.sectionTitle}>Live on Practice</Text>
+      <Text style={styles.hint}>
+        {hasSavedPicks
+          ? `Curated picks for ${featuredDate} (stable all day). Tap Remove to drop one.`
+          : `Automatic top ${PRACTICE_COMMUNITY_PICKS_MAX} until you curate. Remove locks the rest as today’s picks so they stay stable.`}
+      </Text>
+      {liveFeedRows.length === 0 ? (
+        <Text style={styles.emptySection}>Nothing showing on Practice for this day.</Text>
+      ) : (
+        liveFeedRows.map((row, index) => (
+          <SentencePickRow
+            key={row.id}
+            row={row}
+            readOnly
+            rank={index + 1}
+            autoScore={'autoScore' in row ? row.autoScore : undefined}
+            onRemove={() => void removeFromLiveFeed(row.id)}
+            removing={removingId === idKey(row.id)}
+          />
+        ))
+      )}
+
       <Text style={styles.sectionTitle}>Automatic feed preview</Text>
       <Text style={styles.hint}>
         Top {PRACTICE_COMMUNITY_PICKS_MAX} saved sentences (same scoring as the learner app).
         {hasSavedPicks
-          ? ` Learners no longer see this list for ${featuredDate} — they see your saved picks below.`
+          ? ` Learners no longer see this list for ${featuredDate} — they see Live on Practice above.`
           : ` Learners see this on Practice until you save picks for ${featuredDate}.`}
       </Text>
       {autoFeedRows.length === 0 ? (
@@ -421,6 +490,16 @@ const styles = StyleSheet.create({
   pickCorrected: { color: '#ffffff', fontSize: 15, lineHeight: 21 },
   pickIntended: { color: '#8e8e93', fontSize: 13, marginTop: 6, fontStyle: 'italic' },
   pickMeta: { color: '#636366', fontSize: 11, marginTop: 8 },
+  removeBtn: {
+    marginLeft: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: 'rgba(248, 113, 113, 0.12)',
+    alignSelf: 'center',
+  },
+  removeBtnPressed: { opacity: 0.75 },
+  removeBtnText: { color: '#f87171', fontSize: 13, fontWeight: '700' },
   saveBtn: {
     marginTop: 20,
     backgroundColor: ADMIN_ACCENT_GOLD,
