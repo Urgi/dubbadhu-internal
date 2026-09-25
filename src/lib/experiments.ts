@@ -9,6 +9,8 @@ export const APP_CONFIG_ROW_ID = 1
 export const PAYWALL_FREE_N_FLAG_COLUMN = 'paywall_free_n_experiment_enabled' as const
 export const TIMED_COMMENTS_FLAG_COLUMN = 'timed_comments_experiment_enabled' as const
 export const MIC_SKIP_FLAG_COLUMN = 'mic_skip_experiment_enabled' as const
+/** Learner `app_config` column. Off until Internal starts the run. */
+export const SPEAKING_TAP_REPS_FLAG_COLUMN = 'speaking_tap_reps_experiment_enabled' as const
 
 export type ExperimentArm = {
   id: string
@@ -70,9 +72,25 @@ export const MIC_SKIP_V1: KnownExperiment = {
   callAfter: 'After comments is called · ~400 new users',
 }
 
+/** Mic speaking screen vs tap-reps countdown. Flag stays off until this screen starts it. */
+export const SPEAKING_TAP_REPS_V1: KnownExperiment = {
+  key: 'speaking_tap_reps_v1',
+  title: 'Speaking · tap reps',
+  flagColumn: SPEAKING_TAP_REPS_FLAG_COLUMN,
+  arms: [
+    { id: 'control', label: 'Current mic speaking screen' },
+    { id: 'tap_reps', label: 'Tap-reps countdown' },
+  ],
+  metric: 'Lesson 1 finish among exposed users',
+  keep: 'Tap-reps holds or raises L1 finish vs the mic screen',
+  kill: 'L1 finish drops on the tap-reps countdown',
+  callAfter: 'After mic skip is called',
+}
+
 /** Hub list — add rows here as new flags ship. Do not build a creation wizard. */
 export const KNOWN_EXPERIMENTS: KnownExperiment[] = [
   PAYWALL_FREE_N_V1,
   TIMED_COMMENTS_V1,
   MIC_SKIP_V1,
+  SPEAKING_TAP_REPS_V1,
 ]

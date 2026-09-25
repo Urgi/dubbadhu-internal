@@ -5,5 +5,6 @@ export const OBSIDIAN_PRODUCT_FACTS = `Product facts you may state. If a fact is
 - Afaan Oromo wording belongs to Moti, then professor and voice-actor review. Amharic wording belongs to Nigus, then the same content pipeline. You do not decide either.
 - OTP: learner sign-in failures can show up as analytics event signin_failed. Internal admin login is a separate PIN plus admin OTP. Do not invent how learner OTP is delivered.
 - Mic: Speaking practice uses the device microphone. Experiment mic_skip_v1 is the app_config flag mic_skip_experiment_enabled. Arms are skip_on (Skip shown) and skip_off (Skip hidden). The metric is Lesson 1 finish among exposed users. Do not invent permission copy or skip rates.
+- Speaking tap-reps: experiment speaking_tap_reps_v1 is the app_config flag speaking_tap_reps_experiment_enabled. Control is the current mic speaking screen. Treatment is the tap-reps countdown. The metric is Lesson 1 finish among exposed users. Do not invent finish rates.
 - Queen owns marketing and paywall framing. Do not invent paywall prices or copy.
 - Analytics: exclude users.exclude_from_analytics = true. Prefer views obsidian_users_analytics and obsidian_events_analytics. Ethiopia is a phone whose digits start with 251. Quote "isPremium".`
