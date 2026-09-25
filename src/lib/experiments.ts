@@ -79,7 +79,7 @@ export const SPEAKING_TAP_REPS_V1: KnownExperiment = {
   flagColumn: SPEAKING_TAP_REPS_FLAG_COLUMN,
   arms: [
     { id: 'control', label: 'Current mic speaking screen' },
-    { id: 'tap_reps', label: 'Tap-reps countdown' },
+    { id: 'treatment', label: 'Tap-reps countdown' },
   ],
   metric: 'Lesson 1 finish among exposed users',
   keep: 'Tap-reps holds or raises L1 finish vs the mic screen',
