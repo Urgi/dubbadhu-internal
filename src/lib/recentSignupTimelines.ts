@@ -5,6 +5,7 @@ import {
   type AdminRegisteredUserRow,
 } from './adminUsers'
 import { isAnalyticsExcludedUser } from './analyticsExcludedUsers'
+import { fetchLessonDisplayLabels, uniqueLessonIds } from './lessonEventLabels'
 import { regionFromPhone } from './phoneRegion'
 
 export type SignupTimelineStep = {
@@ -82,9 +83,21 @@ function formatClock(iso: string): string {
   })
 }
 
+function lessonName(
+  properties: Record<string, unknown> | null,
+  lessonLabels?: Record<string, string>,
+): string | null {
+  const lessonId = strProp(properties, 'lesson_id')
+  if (lessonId && lessonLabels?.[lessonId]) return lessonLabels[lessonId]
+  const lessonTitle = strProp(properties, 'lesson_title')
+  if (lessonTitle && lessonTitle !== lessonId) return lessonTitle
+  return lessonId
+}
+
 function buildTimelineForUser(
   user: AdminRegisteredUserRow,
   eventsAsc: AnalyticsEventRow[],
+  lessonLabels?: Record<string, string>,
 ): RecentSignupTimeline {
   const displayName = registeredUserDisplayName(user)
   const region = regionFromPhone(user.phone)
@@ -161,6 +174,14 @@ function buildTimelineForUser(
     lessonSummary = `Passed ${screensPassed} screen${screensPassed === 1 ? '' : 's'} in ${formatDurationSeconds(lessonTimeSeconds)}`
   }
 
+  const latestNamed = [...lessonEvents]
+    .reverse()
+    .find((e) => lessonName(e.properties, lessonLabels))
+  const onLesson = latestNamed ? lessonName(latestNamed.properties, lessonLabels) : null
+  if (onLesson) {
+    lessonSummary = `${onLesson} · ${lessonSummary}`
+  }
+
   const steps: SignupTimelineStep[] = []
   steps.push({
     at: signedUpAt,
@@ -176,12 +197,12 @@ function buildTimelineForUser(
   } else {
     const started = lessonEvents.find((e) => e.event_name === 'lesson_started')
     if (started) {
-      const lessonTitle = strProp(started.properties, 'lesson_title')
-      const lessonId = strProp(started.properties, 'lesson_id')
       steps.push({
         at: started.created_at,
         label: 'Started lesson',
-        detail: [lessonTitle || lessonId, formatClock(started.created_at)].filter(Boolean).join(' · '),
+        detail: [lessonName(started.properties, lessonLabels), formatClock(started.created_at)]
+          .filter(Boolean)
+          .join(' · '),
       })
     }
 
@@ -207,7 +228,9 @@ function buildTimelineForUser(
       steps.push({
         at: completed.created_at,
         label: 'Completed lesson',
-        detail: formatClock(completed.created_at),
+        detail: [lessonName(completed.properties, lessonLabels), formatClock(completed.created_at)]
+          .filter(Boolean)
+          .join(' · '),
       })
     } else if (exited) {
       const exitIdx = numProp(exited.properties, 'exit_screen_index')
@@ -216,6 +239,7 @@ function buildTimelineForUser(
         at: exited.created_at,
         label: 'Exited lesson',
         detail: [
+          lessonName(exited.properties, lessonLabels),
           exitIdx != null && total != null ? `Screen ${exitIdx + 1} of ${total}` : null,
           formatClock(exited.created_at),
         ]
@@ -230,6 +254,7 @@ function buildTimelineForUser(
         at: backgrounded.created_at,
         label: 'Left app (background)',
         detail: [
+          lessonName(backgrounded.properties, lessonLabels),
           bgIdx != null && total != null ? `Screen ${bgIdx + 1} of ${total}` : null,
           screenType,
           formatClock(backgrounded.created_at),
@@ -324,12 +349,21 @@ export async function fetchRecentSignupTimelines(
     return { data: [], error: fetchError }
   }
 
-  const timelines = users.map((user) => {
+  const sortedByUser = new Map<string, AnalyticsEventRow[]>()
+  for (const user of users) {
     const rows = (eventsByUser.get(user.id) ?? []).slice().sort((a, b) => {
       return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
     })
-    return buildTimelineForUser(user, rows)
-  })
+    sortedByUser.set(user.id, rows)
+  }
+  const lessonLabels = await fetchLessonDisplayLabels(
+    client,
+    uniqueLessonIds([...sortedByUser.values()].flat()),
+  )
+
+  const timelines = users.map((user) =>
+    buildTimelineForUser(user, sortedByUser.get(user.id) ?? [], lessonLabels),
+  )
 
   return {
     data: timelines,
@@ -387,8 +421,9 @@ export async function fetchSignupTimelineForUser(
   }
 
   events.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+  const lessonLabels = await fetchLessonDisplayLabels(client, uniqueLessonIds(events))
   return {
-    data: buildTimelineForUser(user, events),
+    data: buildTimelineForUser(user, events, lessonLabels),
     error: fetchError ? `events partial: ${fetchError}` : null,
   }
 }

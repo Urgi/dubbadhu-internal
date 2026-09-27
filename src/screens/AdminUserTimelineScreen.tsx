@@ -9,6 +9,7 @@ import {
   type AnalyticsEventRow,
 } from '../lib/analyticsEventsQuery'
 import { formatAnalyticsEventDetail } from '../lib/analyticsHealthEvents'
+import { fetchLessonDisplayLabels, uniqueLessonIds } from '../lib/lessonEventLabels'
 import {
   fetchSignupTimelineForUser,
   type RecentSignupTimeline,
@@ -24,6 +25,7 @@ export default function AdminUserTimelineScreen({ navigation, route }: Props) {
   const user = route.params.user
   const [timeline, setTimeline] = useState<RecentSignupTimeline | null>(null)
   const [recentEvents, setRecentEvents] = useState<AnalyticsEventRow[]>([])
+  const [lessonLabels, setLessonLabels] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [eventsError, setEventsError] = useState('')
@@ -47,8 +49,10 @@ export default function AdminUserTimelineScreen({ navigation, route }: Props) {
     if (eventsRes.error) {
       setEventsError(eventsRes.error)
       setRecentEvents([])
+      setLessonLabels({})
     } else {
       setRecentEvents(eventsRes.data)
+      setLessonLabels(await fetchLessonDisplayLabels(supabase, uniqueLessonIds(eventsRes.data)))
     }
   }, [user])
 
@@ -123,8 +127,8 @@ export default function AdminUserTimelineScreen({ navigation, route }: Props) {
                 {row.created_at.replace('T', ' ').slice(0, 19)}
               </Text>
               <Text style={styles.eventName}>{row.event_name}</Text>
-              <Text style={styles.eventDetail} numberOfLines={2}>
-                {formatAnalyticsEventDetail(row.event_name, row.properties)}
+              <Text style={styles.eventDetail} numberOfLines={3}>
+                {formatAnalyticsEventDetail(row.event_name, row.properties, lessonLabels)}
               </Text>
             </View>
           ))

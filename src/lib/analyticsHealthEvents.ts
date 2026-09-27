@@ -43,15 +43,57 @@ export function isReliabilityAnalyticsEvent(eventName: string): boolean {
   return n.endsWith('_error') || n.endsWith('_failed')
 }
 
-function pickDetail(eventName: string, properties: Record<string, unknown> | null): string {
+function numProp(props: Record<string, unknown>, key: string): number | null {
+  const v = props[key]
+  if (typeof v === 'number' && Number.isFinite(v)) return v
+  if (typeof v === 'string' && v.trim() !== '' && Number.isFinite(Number(v))) return Number(v)
+  return null
+}
+
+/** Series / lesson number / title, plus which screen they were on. */
+function lessonActivityDetail(
+  properties: Record<string, unknown>,
+  lessonLabels?: Record<string, string>,
+): string {
+  const id = typeof properties.lesson_id === 'string' ? properties.lesson_id.trim() : ''
+  const storedTitle =
+    typeof properties.lesson_title === 'string' ? properties.lesson_title.trim() : ''
+  const name =
+    (id && lessonLabels?.[id]) ||
+    (storedTitle && storedTitle !== id ? storedTitle : '') ||
+    id
+
+  const screenIndex = numProp(properties, 'screen_index') ?? numProp(properties, 'exit_screen_index')
+  const total = numProp(properties, 'total_screens')
+  const screenType =
+    typeof properties.screen_type === 'string' ? properties.screen_type.trim() : ''
+
+  const where: string[] = []
+  if (screenIndex != null && total != null && total > 0) {
+    where.push(`screen ${screenIndex + 1} of ${total}`)
+  } else if (screenIndex != null) {
+    where.push(`screen ${screenIndex + 1}`)
+  }
+  if (screenType) where.push(screenType)
+
+  return [name, ...where].filter(Boolean).join(' · ')
+}
+
+function pickDetail(
+  eventName: string,
+  properties: Record<string, unknown> | null,
+  lessonLabels?: Record<string, string>,
+): string {
   const p = properties ?? {}
   const msg =
     (typeof p.error_message === 'string' && p.error_message.trim()) ||
     (typeof p.reason === 'string' && p.reason.trim()) ||
-    (typeof p.lesson_id === 'string' && p.lesson_id.trim()) ||
+    (typeof p.lesson_id === 'string' && p.lesson_id.trim()
+      ? lessonActivityDetail(p, lessonLabels)
+      : '') ||
     (typeof p.context === 'string' && p.context.trim()) ||
     ''
-  if (msg) return msg.slice(0, 120)
+  if (msg) return msg.slice(0, 160)
   const keys = Object.keys(p).slice(0, 3)
   if (keys.length === 0) return '—'
   return keys.map((k) => `${k}: ${String(p[k]).slice(0, 40)}`).join(' · ')
@@ -61,8 +103,9 @@ function pickDetail(eventName: string, properties: Record<string, unknown> | nul
 export function formatAnalyticsEventDetail(
   eventName: string,
   properties: Record<string, unknown> | null,
+  lessonLabels?: Record<string, string>,
 ): string {
-  return pickDetail(eventName, properties)
+  return pickDetail(eventName, properties, lessonLabels)
 }
 
 /** Aggregate reliability rows for the last-24h admin card. */
