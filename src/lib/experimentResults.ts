@@ -92,6 +92,7 @@ export function eventArm(
 ): string {
   const key = experimentKey || eventExperimentKey(properties)
   if (key === 'mic_skip_v1') return strProp(properties, 'mic_skip_arm')
+  if (key === 'speaking_tap_reps_v1') return strProp(properties, 'speaking_tap_reps_arm', 'arm')
   if (key === 'timed_comments_v1') return strProp(properties, 'timed_comments_arm')
   if (key === 'series_intro_translation_v1') {
     return strProp(properties, 'series_intro_arm', 'intro_variant', 'arm', 'variant')
