@@ -20,6 +20,10 @@ const FAMILY_PREMIUM_EXCLUDED = [
   '2e7a5bcf-4177-4b6e-a30c-8b9597fa48d0', // Duresa — brother, real sub, won't churn
   '08a5d7a3-ca37-41bf-aec4-128172c4fcef', // Emenet — store flag, no product_id
   'ee2b9039-4612-48bc-83db-70515a5411e1', // Abuye — friend/tester (+16027368695)
+  '4f46a055-0fc4-42de-8e14-68954e467fed', // Yohannis (2026-08-23)
+  '85cedf12-aa47-4b41-a90e-6774c572db79', // Yohannis (2026-08-07)
+  'a0203927-fb14-47fe-848a-21545f53875a', // S
+  'adaea7f6-a09f-4433-8f17-9af90808a46d', // B
 ]
 
 const DISCUSSION_SEED_EXCLUDED = [

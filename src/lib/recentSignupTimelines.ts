@@ -5,6 +5,7 @@ import {
   type AdminRegisteredUserRow,
 } from './adminUsers'
 import { isAnalyticsExcludedUser } from './analyticsExcludedUsers'
+import { fetchCohortFirstEventAt } from './recentSignupActivation'
 import { fetchLessonDisplayLabels, uniqueLessonIds } from './lessonEventLabels'
 import { regionFromPhone } from './phoneRegion'
 
@@ -343,6 +344,25 @@ export async function fetchRecentSignupTimelines(
 
     offset += batch.length
     if (batch.length < pageSize) break
+  }
+
+  const activationRes = await fetchCohortFirstEventAt(
+    client,
+    users.map((u) => u.id),
+    'activation_complete',
+  )
+  if (activationRes.error && !fetchError) fetchError = activationRes.error
+  for (const row of activationRes.data) {
+    const list = eventsByUser.get(row.userId) ?? []
+    if (list.some((e) => e.event_name === 'activation_complete')) continue
+    list.push({
+      id: `activation:${row.userId}`,
+      user_id: row.userId,
+      event_name: 'activation_complete',
+      properties: {},
+      created_at: row.firstAt,
+    })
+    eventsByUser.set(row.userId, list)
   }
 
   if (fetchError && eventsByUser.size === 0) {

@@ -22,13 +22,22 @@ import { type AnalyticsCountryScope } from '../lib/analyticsEventsQuery'
 import { isAnalyticsExcludedUserId } from '../lib/analyticsExcludedUsers'
 import {
   METRIC_TONE_COLOR,
+  toneForActivationPercent,
+  toneForActiveTodayPercent,
+  toneForPremiumPercent,
   toneForRegisteredTotal,
+  toneForWeeklyActivationDelta,
+  toneForWeeklyPremiumDelta,
   toneForWeeklyRegisteredDelta,
 } from '../lib/adminMetricTone'
 import {
   fetchProductionSeriesPipeline,
   type ProductionSeriesPipeline,
 } from '../lib/productionSeriesPipeline'
+import {
+  fetchRecentSignupFunnelRates,
+  type RecentSignupFunnelRates,
+} from '../lib/recentSignupActivation'
 import supabase from '../lib/supabase'
 import type { RootStackParamList } from '../types'
 
@@ -142,6 +151,8 @@ export default function AdminAnalyticsScreen({ navigation }: Props) {
   const [usersTotal, setUsersTotal] = useState<number | null>(null)
   const [usersThisWeek, setUsersThisWeek] = useState<number | null>(null)
   const [activeToday, setActiveToday] = useState<number | null>(null)
+  const [funnel, setFunnel] = useState<RecentSignupFunnelRates | null>(null)
+  const [premiumFunnel, setPremiumFunnel] = useState<RecentSignupFunnelRates | null>(null)
   const [retention, setRetention] = useState<RetentionRow[]>([])
   const [waitlistByLang, setWaitlistByLang] = useState<{ language: string; count: number }[]>([])
   const [tutorInterestCount, setTutorInterestCount] = useState<number | null>(null)
@@ -182,6 +193,14 @@ export default function AdminAnalyticsScreen({ navigation }: Props) {
     } else {
       setActiveToday(Number(evToday.data ?? 0))
     }
+
+    const funnelRes = await fetchRecentSignupFunnelRates(supabase, 50)
+    if (funnelRes.error) errs.push(`activation: ${funnelRes.error}`)
+    setFunnel(funnelRes.data)
+
+    const premiumRes = await fetchRecentSignupFunnelRates(supabase, 50, 'non_et')
+    if (premiumRes.error) errs.push(`premium (non-ET): ${premiumRes.error}`)
+    setPremiumFunnel(premiumRes.data)
 
     const retRes = await supabase.rpc('admin_get_retention_cohorts', {
       p_limit: 500,
@@ -410,11 +429,81 @@ export default function AdminAnalyticsScreen({ navigation }: Props) {
           accessibilityLabel="View users active today"
         >
           <Text style={styles.metricLabel}>Active today</Text>
-          <Text style={styles.metricValue}>{activeToday != null ? activeToday : '—'}</Text>
+          <Text
+            style={[
+              styles.metricValue,
+              { color: METRIC_TONE_COLOR[toneForActiveTodayPercent(activePctOfTotal)] },
+            ]}
+          >
+            {activePctOfTotal != null ? `${activePctOfTotal}%` : '—'}
+          </Text>
           <Text style={styles.metricDeltaNeutral}>
-            {activePctOfTotal != null ? `${activePctOfTotal}% of total` : '—'}
+            {activeToday != null && usersTotal != null ? `${activeToday}/${usersTotal}` : '—'}
           </Text>
         </Pressable>
+      </View>
+      <View style={styles.metricRow}>
+        <View style={styles.metricCard}>
+          <Text style={styles.metricLabel}>Activation</Text>
+          <Text
+            style={[
+              styles.metricValue,
+              {
+                color: METRIC_TONE_COLOR[toneForActivationPercent(funnel?.activationPercent ?? null)],
+              },
+            ]}
+          >
+            {funnel?.activationPercent != null ? `${funnel.activationPercent.toFixed(0)}%` : '—'}
+          </Text>
+          <Text
+            style={[
+              styles.metricDelta,
+              {
+                color: METRIC_TONE_COLOR[
+                  toneForWeeklyActivationDelta(funnel?.activatedThisWeek ?? null, usersThisWeek)
+                ],
+              },
+            ]}
+          >
+            {funnel != null
+              ? `${funnel.activated}/${funnel.cohortSize} last signups · +${funnel.activatedThisWeek} this week`
+              : '—'}
+          </Text>
+        </View>
+        <View style={styles.metricCard}>
+          <Text style={styles.metricLabel}>Premium (non-ET)</Text>
+          <Text
+            style={[
+              styles.metricValue,
+              {
+                color: METRIC_TONE_COLOR[
+                  toneForPremiumPercent(premiumFunnel?.premiumConversionPercent ?? null)
+                ],
+              },
+            ]}
+          >
+            {premiumFunnel?.premiumConversionPercent != null
+              ? `${premiumFunnel.premiumConversionPercent.toFixed(0)}%`
+              : '—'}
+          </Text>
+          <Text
+            style={[
+              styles.metricDelta,
+              {
+                color: METRIC_TONE_COLOR[
+                  toneForWeeklyPremiumDelta(
+                    premiumFunnel?.premiumConvertedThisWeek ?? null,
+                    usersThisWeek,
+                  )
+                ],
+              },
+            ]}
+          >
+            {premiumFunnel != null
+              ? `${premiumFunnel.premiumConverted}/${premiumFunnel.cohortSize} last signups · +${premiumFunnel.premiumConvertedThisWeek} this week`
+              : '—'}
+          </Text>
+        </View>
       </View>
 
       <Text style={styles.sectionLabel}>Series config</Text>

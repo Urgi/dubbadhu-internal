@@ -1,22 +1,15 @@
 /**
- * Admin metric color standards — early language-learning, first month of production.
+ * Admin metric colors vs top consumer LL (Duolingo public metrics, Q2 2026):
+ * DAU 58.7M · MAU 140.6M · DAU/MAU ~42% · paid 12.7M · paid/MAU ~9%.
  *
- * Goal context: reach ~300 paid users / month by month 6.
- * Early consumer LL apps typically see roughly:
- * - Registered total (month 1): ≥200 good · 80–199 neutral · <80 bad
- *   (thin base can’t scale to ~300 paid/mo by m6 without a step-change in signups)
- * - Activation (first-lesson / aha): ~20–40% of signups
- * - Signup → paid: ~2–5% early; ≥5% is strong while volume is still small
+ * Green  = beating that competitor band
+ * White  = in range
+ * Red    = below
  *
- * Month-1 paid pace on a ramp to 300/mo by m6 (geometric-ish):
- * ~25–40 paid in month 1 → about 6–10 paid / week once the month is moving.
- * Early weeks can be quieter; 0 paid while new learners sign up is a miss.
- * Weekly registered: ≥15 green (pace toward an 80–200 base); 1–14 white; 0 white.
- *
- * Tone → color:
- * - good    → green  (#30d158)
- * - neutral → white  (#ffffff)
- * - bad     → red    (#ff453a)
+ * Our cards are not the same definition as Duo’s 10-Q. We map the closest public number:
+ * - Active today = DAU / lifetime registered (Duo does not publish this; implied DAU/lifetime ~5–7%)
+ * - Activation = last-50 first-lesson (industry first-value ~40–60%; Duo does not publish L1 %)
+ * - Premium = last-50 non-ET clean store / Duo paid-of-MAU ~9%
  */
 
 export type MetricTone = 'good' | 'neutral' | 'bad'
@@ -27,13 +20,13 @@ export const METRIC_TONE_COLOR: Record<MetricTone, string> = {
   bad: '#ff453a',
 }
 
-/** Last-≤50 signup activation rate (activation_complete). */
-export const ACTIVATION_PCT_GOOD = 35
-export const ACTIVATION_PCT_OK = 20
+/** Last-≤50 first-lesson. Industry first-value ~40–60%; green beats the mid/top of that band. */
+export const ACTIVATION_PCT_GOOD = 50
+export const ACTIVATION_PCT_OK = 40
 
-/** Last-≤50 signup → paid rate (premium_purchased, excl. complimentary). */
-export const PREMIUM_PCT_GOOD = 5
-export const PREMIUM_PCT_OK = 2
+/** Last-≤50 non-ET clean store vs Duolingo paid/MAU ~9%. */
+export const PREMIUM_PCT_GOOD = 10
+export const PREMIUM_PCT_OK = 6
 
 /**
  * Weekly paid conversions on an early path to ~300 paid/mo by month 6.
@@ -42,11 +35,8 @@ export const PREMIUM_PCT_OK = 2
 export const PREMIUM_WEEKLY_GOOD = 6
 export const PREMIUM_WEEKLY_OK = 1
 
-/**
- * Weekly activations vs new signups this week.
- * Early LL: aim for at least ~25% of this week’s signups to activate.
- */
-export const ACTIVATION_WEEKLY_VS_SIGNUPS_GOOD = 0.25
+/** Weekly activations vs new signups — same first-value band as last-50 activation. */
+export const ACTIVATION_WEEKLY_VS_SIGNUPS_GOOD = 0.5
 
 /**
  * Weekly new signups (month 1).
@@ -109,6 +99,17 @@ export function toneForPremiumPercent(pct: number | null | undefined): MetricTon
   if (pct == null || !Number.isFinite(pct)) return 'neutral'
   if (pct >= PREMIUM_PCT_GOOD) return 'good'
   if (pct < PREMIUM_PCT_OK) return 'bad'
+  return 'neutral'
+}
+
+/** DAU / lifetime registered vs implied Duolingo DAU/lifetime (~5–7%). */
+export const ACTIVE_TODAY_PCT_GOOD = 8
+export const ACTIVE_TODAY_PCT_OK = 5
+
+export function toneForActiveTodayPercent(pct: number | null | undefined): MetricTone {
+  if (pct == null || !Number.isFinite(pct)) return 'neutral'
+  if (pct >= ACTIVE_TODAY_PCT_GOOD) return 'good'
+  if (pct < ACTIVE_TODAY_PCT_OK) return 'bad'
   return 'neutral'
 }
 
@@ -219,11 +220,11 @@ export function explainActivationMetric(args: {
   let pctWhy: string
   if (pct == null) pctWhy = 'Activation rate unavailable.'
   else if (pctTone === 'good') {
-    pctWhy = `${pct.toFixed(0)}% ≥${ACTIVATION_PCT_GOOD}% — strong early LL activation (first-lesson / aha).`
+    pctWhy = `${pct.toFixed(0)}% ≥${ACTIVATION_PCT_GOOD}% — beating the 40–60% first-value band used for consumer LL onboarding.`
   } else if (pctTone === 'bad') {
-    pctWhy = `${pct.toFixed(0)}% <${ACTIVATION_PCT_OK}% — below early LL floor; too many signups stall before the first lesson.`
+    pctWhy = `${pct.toFixed(0)}% <${ACTIVATION_PCT_OK}% — below the ~40% first-lesson floor typical of consumer LL onboarding.`
   } else {
-    pctWhy = `${pct.toFixed(0)}% is in the ${ACTIVATION_PCT_OK}–${ACTIVATION_PCT_GOOD - 1}% band — acceptable early, not yet strong.`
+    pctWhy = `${pct.toFixed(0)}% is in the ${ACTIVATION_PCT_OK}–${ACTIVATION_PCT_GOOD - 1}% competitor band (first-value 40–60%).`
   }
   if (args.activated != null && args.cohortSize != null) {
     pctWhy += ` (${args.activated}/${args.cohortSize} of last ≤50 signups).`
@@ -255,7 +256,7 @@ export function explainActivationMetric(args: {
       `“+N this week”: ${toneSentence(weekTone)}`,
       weekWhy,
       '',
-      `Benchmarks: rate ≥${ACTIVATION_PCT_GOOD}% green · ${ACTIVATION_PCT_OK}–${ACTIVATION_PCT_GOOD - 1}% white · <${ACTIVATION_PCT_OK}% red. Weekly: ≥${Math.round(ACTIVATION_WEEKLY_VS_SIGNUPS_GOOD * 100)}% of new signups activate → green; 0 activations with signups → red.`,
+      `Rate is activation_complete among the last ≤50 registered IDs (not a newest-events scan). Benchmarks: ≥${ACTIVATION_PCT_GOOD}% green · ${ACTIVATION_PCT_OK}–${ACTIVATION_PCT_GOOD - 1}% white · <${ACTIVATION_PCT_OK}% red. Weekly: ≥${Math.round(ACTIVATION_WEEKLY_VS_SIGNUPS_GOOD * 100)}% of new signups activate → green; 0 activations with signups → red.`,
     ].join('\n'),
   }
 }
@@ -276,14 +277,14 @@ export function explainPremiumMetric(args: {
   let pctWhy: string
   if (pct == null) pctWhy = 'Premium rate unavailable.'
   else if (pctTone === 'good') {
-    pctWhy = `${pct.toFixed(0)}% ≥${PREMIUM_PCT_GOOD}% — strong early signup→paid for consumer LL.`
+    pctWhy = `${pct.toFixed(0)}% ≥${PREMIUM_PCT_GOOD}% — beating Duolingo paid/MAU (~9%).`
   } else if (pctTone === 'bad') {
-    pctWhy = `${pct.toFixed(0)}% <${PREMIUM_PCT_OK}% — below early paid-conversion floor on the path to ~300 paid/mo by month 6.`
+    pctWhy = `${pct.toFixed(0)}% <${PREMIUM_PCT_OK}% — below Duolingo’s ~9% paid/MAU band (we use last-50 non-ET store subs).`
   } else {
-    pctWhy = `${pct.toFixed(0)}% is in the ${PREMIUM_PCT_OK}–${PREMIUM_PCT_GOOD - 1}% band — typical early LL paid conversion.`
+    pctWhy = `${pct.toFixed(0)}% is in the ${PREMIUM_PCT_OK}–${PREMIUM_PCT_GOOD - 1}% band around Duolingo paid/MAU (~9%).`
   }
   if (args.paid != null && args.cohortSize != null) {
-    pctWhy += ` (${args.paid}/${args.cohortSize} clean App Store subs in last ≤50; family/free/incomplete store flags excluded).`
+    pctWhy += ` (${args.paid}/${args.cohortSize} clean App Store subs in last ≤50 non-ET signups; ET is excluded because they do not see the store paywall. Family/free/incomplete store flags excluded).`
   }
 
   let weekWhy: string

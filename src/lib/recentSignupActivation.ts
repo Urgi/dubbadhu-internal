@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { fetchRegisteredUsers } from './adminUsers'
+import type { AnalyticsCountryScope } from './analyticsEventsQuery'
 import { isAnalyticsExcludedUserId } from './analyticsExcludedUsers'
 
 export type RecentSignupFunnelRates = {
@@ -48,20 +49,50 @@ export function isCleanStoreSubscriber(row: UserPremiumRow | null | undefined): 
   return product.length > 0
 }
 
+export type CohortFirstEvent = { userId: string; firstAt: string }
+
+/** First `event_name` timestamp per id — not the global newest-N events feed. */
+export async function fetchCohortFirstEventAt(
+  client: SupabaseClient,
+  userIds: string[],
+  eventName: string,
+): Promise<{ data: CohortFirstEvent[]; error: string | null }> {
+  const ids = userIds.filter((id) => id && !isAnalyticsExcludedUserId(id)).slice(0, 50)
+  if (ids.length === 0) return { data: [], error: null }
+
+  const { data, error } = await client.rpc('admin_cohort_first_event_at', {
+    p_user_ids: ids,
+    p_event_name: eventName,
+  })
+  if (error) return { data: [], error: error.message }
+
+  const rows = (data ?? []) as Array<{ user_id?: string; first_at?: string }>
+  return {
+    data: rows
+      .map((row) => ({
+        userId: String(row.user_id ?? ''),
+        firstAt: String(row.first_at ?? ''),
+      }))
+      .filter((row) => row.userId && row.firstAt),
+    error: null,
+  }
+}
+
 /**
  * Activation + paid premium among the newest registered learners (max 50).
- * - Activated = `activation_complete`
+ * - Activated = `activation_complete` for those user IDs (index on user_id, event_name)
  * - Premium = currently a clean store subscriber (isPremium + store + product_id)
- *   Historical `premium_purchased` alone does not count (expired/test buys inflate the rate).
  * - Premium this week = clean store sub who also has `premium_purchased` in the last 7 days
+ * Pass `non_et` for store conversion (ET does not see the paywall).
  */
 export async function fetchRecentSignupFunnelRates(
   client: SupabaseClient,
   limit = 50,
+  countryScope: AnalyticsCountryScope = 'all',
 ): Promise<{ data: RecentSignupFunnelRates | null; error: string | null }> {
   const capped = Math.max(1, Math.min(limit, 50))
   const weekAgoMs = Date.now() - 7 * 86400000
-  const usersRes = await fetchRegisteredUsers(capped)
+  const usersRes = await fetchRegisteredUsers(capped, countryScope)
   if (usersRes.error) return { data: null, error: usersRes.error }
 
   const users = (usersRes.data ?? []).slice(0, capped)
@@ -69,56 +100,30 @@ export async function fetchRecentSignupFunnelRates(
     return { data: emptyRates(), error: null }
   }
 
-  const userIds = new Set(users.map((u) => u.id))
-  const oldest = users.reduce((min, u) => {
-    const t = new Date(u.created_at).getTime()
-    return Number.isFinite(t) && t < min ? t : min
-  }, Date.now())
-  const since = new Date(oldest - 60 * 60 * 1000).toISOString()
+  const userIds = users.map((u) => u.id)
+  const [activatedRes, purchasedRes] = await Promise.all([
+    fetchCohortFirstEventAt(client, userIds, 'activation_complete'),
+    fetchCohortFirstEventAt(client, userIds, 'premium_purchased'),
+  ])
 
-  const activated = new Set<string>()
-  const activatedThisWeek = new Set<string>()
-  const purchasedThisWeek = new Set<string>()
-  let offset = 0
-  const pageSize = 1000
-  const maxRows = 5000
-  let eventsError: string | null = null
-
-  while (offset < maxRows) {
-    const { data, error } = await client.rpc('admin_fetch_analytics_events', {
-      p_since: since,
-      p_limit: pageSize,
-      p_offset: offset,
-    })
-    if (error) {
-      eventsError = error.message
-      break
-    }
-    const batch = (data ?? []) as Array<{
-      user_id: string | null
-      event_name: string
-      created_at: string
-    }>
-    if (batch.length === 0) break
-
-    for (const row of batch) {
-      const uid = row.user_id == null ? null : String(row.user_id)
-      if (!uid || !userIds.has(uid) || isAnalyticsExcludedUserId(uid)) continue
-      const at = new Date(row.created_at).getTime()
-      const thisWeek = Number.isFinite(at) && at >= weekAgoMs
-
-      if (row.event_name === 'activation_complete') {
-        activated.add(uid)
-        if (thisWeek) activatedThisWeek.add(uid)
-      }
-      if (row.event_name === 'premium_purchased' && thisWeek) {
-        purchasedThisWeek.add(uid)
-      }
-    }
-
-    offset += batch.length
-    if (batch.length < pageSize) break
-  }
+  const eventsError = activatedRes.error || purchasedRes.error
+  const activated = new Set(activatedRes.data.map((row) => row.userId))
+  const activatedThisWeek = new Set(
+    activatedRes.data
+      .filter((row) => {
+        const at = new Date(row.firstAt).getTime()
+        return Number.isFinite(at) && at >= weekAgoMs
+      })
+      .map((row) => row.userId),
+  )
+  const purchasedThisWeek = new Set(
+    purchasedRes.data
+      .filter((row) => {
+        const at = new Date(row.firstAt).getTime()
+        return Number.isFinite(at) && at >= weekAgoMs
+      })
+      .map((row) => row.userId),
+  )
 
   const premium = new Set<string>()
   const premiumThisWeek = new Set<string>()

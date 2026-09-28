@@ -22,6 +22,7 @@ import {
   explainPremiumMetric,
   explainRegisteredMetric,
   toneForActivationPercent,
+  toneForActiveTodayPercent,
   toneForPremiumPercent,
   toneForRegisteredTotal,
   toneForWeeklyActivationDelta,
@@ -61,6 +62,8 @@ function SectionCard({
   counts,
   usersThisWeek,
   funnel,
+  premiumFunnel,
+  activeToday,
   seriesPipeline,
   onPress,
 }: {
@@ -68,6 +71,8 @@ function SectionCard({
   counts: AdminHomeCounts
   usersThisWeek: number | null
   funnel: RecentSignupFunnelRates | null
+  premiumFunnel: RecentSignupFunnelRates | null
+  activeToday: number | null
   seriesPipeline: ProductionSeriesPipeline | null
   onPress: () => void
 }) {
@@ -84,12 +89,17 @@ function SectionCard({
     signupsThisWeek,
   )
   const premiumDeltaTone = toneForWeeklyPremiumDelta(
-    funnel?.premiumConvertedThisWeek ?? null,
+    premiumFunnel?.premiumConvertedThisWeek ?? null,
     signupsThisWeek,
   )
   const registeredValueTone = toneForRegisteredTotal(counts.usersTotal)
   const activationValueTone = toneForActivationPercent(funnel?.activationPercent ?? null)
-  const premiumValueTone = toneForPremiumPercent(funnel?.premiumConversionPercent ?? null)
+  const premiumValueTone = toneForPremiumPercent(premiumFunnel?.premiumConversionPercent ?? null)
+  const activeTodayPct =
+    activeToday != null && counts.usersTotal != null && counts.usersTotal > 0
+      ? Number((((activeToday / counts.usersTotal) * 100).toFixed(0)))
+      : null
+  const activeTodayValueTone = toneForActiveTodayPercent(activeTodayPct)
 
   const showMetricWhy = (explanation: { title: string; message: string }) => {
     Alert.alert(explanation.title, explanation.message)
@@ -133,6 +143,45 @@ function SectionCard({
               {usersThisWeek != null ? `+${usersThisWeek} this week` : '—'}
             </Text>
           </Pressable>
+          <View style={styles.metricCard}>
+            <Text style={styles.metricCardLabel}>Active today</Text>
+            <Text style={[styles.metricCardValue, { color: METRIC_TONE_COLOR[activeTodayValueTone] }]}>
+              {activeTodayPct != null ? `${activeTodayPct}%` : '—'}
+            </Text>
+            <Text style={styles.metricCardDeltaMuted}>
+              {activeToday != null && counts.usersTotal != null
+                ? `${activeToday}/${counts.usersTotal}`
+                : '—'}
+            </Text>
+          </View>
+          <Pressable
+            style={styles.metricCard}
+            onLongPress={() =>
+              showMetricWhy(
+                explainPremiumMetric({
+                  percent: premiumFunnel?.premiumConversionPercent ?? null,
+                  paidThisWeek: premiumFunnel?.premiumConvertedThisWeek ?? null,
+                  signupsThisWeek,
+                  paid: premiumFunnel?.premiumConverted ?? null,
+                  cohortSize: premiumFunnel?.cohortSize ?? null,
+                }),
+              )
+            }
+            delayLongPress={350}
+            accessibilityHint="Long press for color explanation"
+          >
+            <Text style={styles.metricCardLabel}>Premium (non-ET)</Text>
+            <Text style={[styles.metricCardValue, { color: METRIC_TONE_COLOR[premiumValueTone] }]}>
+              {premiumFunnel?.premiumConversionPercent != null
+                ? `${premiumFunnel.premiumConversionPercent.toFixed(0)}%`
+                : '—'}
+            </Text>
+            <Text style={[styles.metricCardDelta, { color: METRIC_TONE_COLOR[premiumDeltaTone] }]}>
+              {premiumFunnel != null
+                ? `${premiumFunnel.premiumConverted}/${premiumFunnel.cohortSize} last · +${premiumFunnel.premiumConvertedThisWeek} this week`
+                : '—'}
+            </Text>
+          </Pressable>
           <Pressable
             style={styles.metricCard}
             onLongPress={() =>
@@ -154,33 +203,9 @@ function SectionCard({
               {funnel?.activationPercent != null ? `${funnel.activationPercent.toFixed(0)}%` : '—'}
             </Text>
             <Text style={[styles.metricCardDelta, { color: METRIC_TONE_COLOR[activationDeltaTone] }]}>
-              {funnel != null ? `+${funnel.activatedThisWeek} this week` : '—'}
-            </Text>
-          </Pressable>
-          <Pressable
-            style={styles.metricCard}
-            onLongPress={() =>
-              showMetricWhy(
-                explainPremiumMetric({
-                  percent: funnel?.premiumConversionPercent ?? null,
-                  paidThisWeek: funnel?.premiumConvertedThisWeek ?? null,
-                  signupsThisWeek,
-                  paid: funnel?.premiumConverted ?? null,
-                  cohortSize: funnel?.cohortSize ?? null,
-                }),
-              )
-            }
-            delayLongPress={350}
-            accessibilityHint="Long press for color explanation"
-          >
-            <Text style={styles.metricCardLabel}>Premium</Text>
-            <Text style={[styles.metricCardValue, { color: METRIC_TONE_COLOR[premiumValueTone] }]}>
-              {funnel?.premiumConversionPercent != null
-                ? `${funnel.premiumConversionPercent.toFixed(0)}%`
+              {funnel != null
+                ? `${funnel.activated}/${funnel.cohortSize} · +${funnel.activatedThisWeek} this week`
                 : '—'}
-            </Text>
-            <Text style={[styles.metricCardDelta, { color: METRIC_TONE_COLOR[premiumDeltaTone] }]}>
-              {funnel != null ? `+${funnel.premiumConvertedThisWeek} this week` : '—'}
             </Text>
           </Pressable>
         </View>
@@ -235,6 +260,8 @@ export default function AdminHomeScreen({ navigation }: Props) {
     openDiscussionReports: null,
   })
   const [funnel, setFunnel] = useState<RecentSignupFunnelRates | null>(null)
+  const [premiumFunnel, setPremiumFunnel] = useState<RecentSignupFunnelRates | null>(null)
+  const [activeToday, setActiveToday] = useState<number | null>(null)
   const [seriesPipeline, setSeriesPipeline] = useState<ProductionSeriesPipeline | null>(null)
   const [usersThisWeek, setUsersThisWeek] = useState<number | null>(null)
   const [refreshing, setRefreshing] = useState(false)
@@ -257,6 +284,8 @@ export default function AdminHomeScreen({ navigation }: Props) {
       discussionReviewCount,
       freeAccessRes,
       funnelRes,
+      premiumFunnelRes,
+      activeTodayRes,
       seriesPipelineRes,
     ] = await Promise.all([
       supabase.from('words').select('id', { count: 'exact', head: true }).eq('status', 'recorded'),
@@ -273,6 +302,8 @@ export default function AdminHomeScreen({ navigation }: Props) {
       fetchPendingDiscussionReviewCount(),
       supabase.rpc('admin_complimentary_users_count'),
       fetchRecentSignupFunnelRates(supabase, 50),
+      fetchRecentSignupFunnelRates(supabase, 50, 'non_et'),
+      supabase.rpc('admin_count_active_users_today'),
       fetchProductionSeriesPipeline(supabase),
     ])
 
@@ -309,8 +340,16 @@ export default function AdminHomeScreen({ navigation }: Props) {
     }
     if (freeAccessRes?.error) errs.push(`free access: ${freeAccessRes.error.message}`)
     if (funnelRes.error) errs.push(`funnel: ${funnelRes.error}`)
+    if (premiumFunnelRes.error) errs.push(`premium (non-ET): ${premiumFunnelRes.error}`)
+    if (activeTodayRes.error) {
+      errs.push(`active today: ${activeTodayRes.error.message}`)
+      setActiveToday(null)
+    } else {
+      setActiveToday(Number(activeTodayRes.data ?? 0))
+    }
     if (seriesPipelineRes.error) errs.push(`series pipeline: ${seriesPipelineRes.error}`)
     setFunnel(funnelRes.data)
+    setPremiumFunnel(premiumFunnelRes.data)
     setSeriesPipeline(seriesPipelineRes.data)
     setError(errs.join('\n'))
   }, [])
@@ -394,6 +433,8 @@ export default function AdminHomeScreen({ navigation }: Props) {
             counts={counts}
             usersThisWeek={usersThisWeek}
             funnel={funnel}
+            premiumFunnel={premiumFunnel}
+            activeToday={activeToday}
             seriesPipeline={seriesPipeline}
             onPress={() => {
               if (section === 'analytics') {
@@ -522,10 +563,12 @@ const styles = StyleSheet.create({
   analyticsMetrics: {
     marginTop: 14,
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
   },
   metricCard: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: '47%',
     backgroundColor: '#1c1c1e',
     borderRadius: 14,
     paddingVertical: 12,
