@@ -85,8 +85,24 @@ function pickDetail(
   lessonLabels?: Record<string, string>,
 ): string {
   const p = properties ?? {}
+  const reason = typeof p.reason === 'string' ? p.reason.trim() : ''
+  const code = typeof p.error_code === 'string' ? p.error_code.trim() : ''
+  const flow = typeof p.flow === 'string' ? p.flow.trim() : ''
+  const attempt =
+    typeof p.attempt === 'number' && Number.isFinite(p.attempt) ? `#${p.attempt}` : ''
+  const session =
+    typeof p.otp_session_id === 'string' && p.otp_session_id.trim()
+      ? p.otp_session_id.trim().slice(0, 8)
+      : ''
+  const msgText = typeof p.error_message === 'string' ? p.error_message.trim() : ''
+  if (reason || code || session) {
+    return [reason, code, flow, attempt, session, msgText]
+      .filter(Boolean)
+      .join(' · ')
+      .slice(0, 160)
+  }
   const msg =
-    (typeof p.error_message === 'string' && p.error_message.trim()) ||
+    msgText ||
     (typeof p.reason === 'string' && p.reason.trim()) ||
     (typeof p.lesson_id === 'string' && p.lesson_id.trim()
       ? lessonActivityDetail(p, lessonLabels)
