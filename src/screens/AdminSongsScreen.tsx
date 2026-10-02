@@ -94,6 +94,8 @@ export default function AdminSongsScreen({ navigation }: Props) {
   const [editorOpen, setEditorOpen] = useState(false)
   const [draft, setDraft] = useState<SongDraft>(() => emptyDraft('oromo'))
   const [recs, setRecs] = useState<RecRow[]>([])
+  const [listenForTheseEnabled, setListenForTheseEnabled] = useState(false)
+  const [listenFlagSaving, setListenFlagSaving] = useState(false)
 
   const load = useCallback(async () => {
     setError('')
@@ -119,6 +121,13 @@ export default function AdminSongsScreen({ navigation }: Props) {
       .order('created_at', { ascending: false })
       .limit(40)
     setRecs((recData || []) as RecRow[])
+
+    const { data: cfg } = await supabase
+      .from('app_config')
+      .select('songs_listen_for_these_enabled')
+      .eq('id', 1)
+      .maybeSingle()
+    setListenForTheseEnabled(cfg?.songs_listen_for_these_enabled === true)
   }, [language])
 
   useFocusEffect(
@@ -160,6 +169,26 @@ export default function AdminSongsScreen({ navigation }: Props) {
     await load()
     setRefreshing(false)
   }, [load])
+
+  const onToggleListenForThese = useCallback(
+    (next: boolean) => {
+      const previous = listenForTheseEnabled
+      setListenForTheseEnabled(next)
+      setListenFlagSaving(true)
+      void (async () => {
+        const { error: err } = await supabase.from('app_config').upsert(
+          { id: 1, songs_listen_for_these_enabled: next },
+          { onConflict: 'id' },
+        )
+        setListenFlagSaving(false)
+        if (err) {
+          setListenForTheseEnabled(previous)
+          Alert.alert('Could not save', err.message)
+        }
+      })()
+    },
+    [listenForTheseEnabled],
+  )
 
   const openEdit = useCallback((row: SongRow) => {
     setDraft({
@@ -278,6 +307,23 @@ export default function AdminSongsScreen({ navigation }: Props) {
             </Text>
           </Pressable>
         ))}
+      </View>
+
+      <View style={styles.flagCard}>
+        <View style={styles.flagCopy}>
+          <Text style={styles.flagTitle}>Listen for these</Text>
+          <Text style={styles.flagHint}>
+            Show phrase translations under each song in the learner Music screen. Keep off while
+            you polish copy.
+          </Text>
+        </View>
+        <Switch
+          value={listenForTheseEnabled}
+          onValueChange={onToggleListenForThese}
+          disabled={listenFlagSaving}
+          trackColor={{ false: '#333', true: ADMIN_ACCENT_GOLD }}
+          thumbColor="#fff"
+        />
       </View>
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -488,6 +534,21 @@ const styles = StyleSheet.create({
   langChipOn: { borderColor: ADMIN_ACCENT_GOLD, backgroundColor: 'rgba(212,164,55,0.12)' },
   langChipText: { color: '#aaa', fontWeight: '600' },
   langChipTextOn: { color: ADMIN_ACCENT_GOLD },
+  flagCard: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    padding: 14,
+    borderRadius: 12,
+    backgroundColor: '#141414',
+    borderWidth: 1,
+    borderColor: '#2a2a2a',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  flagCopy: { flex: 1, minWidth: 0 },
+  flagTitle: { color: '#fff', fontWeight: '700', fontSize: 14, marginBottom: 4 },
+  flagHint: { color: '#888', fontSize: 12, lineHeight: 17 },
   hint: { color: '#888', fontSize: 12, marginBottom: 12, lineHeight: 17 },
   recsBlock: { marginBottom: 18 },
   recsTitle: {

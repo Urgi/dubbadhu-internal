@@ -24,6 +24,7 @@ import {
   METRIC_TONE_COLOR,
   toneForActivationPercent,
   toneForActiveTodayPercent,
+  toneForNotificationsPercent,
   toneForPremiumPercent,
   toneForRegisteredTotal,
   toneForWeeklyActivationDelta,
@@ -36,6 +37,7 @@ import {
 } from '../lib/productionSeriesPipeline'
 import {
   fetchRecentSignupFunnelRates,
+  fetchUsersOnlineNow,
   type RecentSignupFunnelRates,
 } from '../lib/recentSignupActivation'
 import supabase from '../lib/supabase'
@@ -151,6 +153,7 @@ export default function AdminAnalyticsScreen({ navigation }: Props) {
   const [usersTotal, setUsersTotal] = useState<number | null>(null)
   const [usersThisWeek, setUsersThisWeek] = useState<number | null>(null)
   const [activeToday, setActiveToday] = useState<number | null>(null)
+  const [onlineNow, setOnlineNow] = useState<number | null>(null)
   const [funnel, setFunnel] = useState<RecentSignupFunnelRates | null>(null)
   const [premiumFunnel, setPremiumFunnel] = useState<RecentSignupFunnelRates | null>(null)
   const [retention, setRetention] = useState<RetentionRow[]>([])
@@ -192,6 +195,14 @@ export default function AdminAnalyticsScreen({ navigation }: Props) {
       setActiveToday(null)
     } else {
       setActiveToday(Number(evToday.data ?? 0))
+    }
+
+    const onlineRes = await fetchUsersOnlineNow(supabase, 30 * 60 * 1000, scope)
+    if (onlineRes.error) {
+      errs.push(`active now: ${onlineRes.error}`)
+      setOnlineNow(null)
+    } else {
+      setOnlineNow(onlineRes.data)
     }
 
     const funnelRes = await fetchRecentSignupFunnelRates(supabase, 50)
@@ -441,6 +452,35 @@ export default function AdminAnalyticsScreen({ navigation }: Props) {
             {activeToday != null && usersTotal != null ? `${activeToday}/${usersTotal}` : '—'}
           </Text>
         </Pressable>
+      </View>
+      <View style={styles.metricRow}>
+        <View style={styles.metricCard}>
+          <Text style={styles.metricLabel}>Active now</Text>
+          <Text style={styles.metricValue}>{onlineNow != null ? onlineNow : '—'}</Text>
+          <Text style={styles.metricDeltaNeutral}>Online last 30 min</Text>
+        </View>
+        <View style={styles.metricCard}>
+          <Text style={styles.metricLabel}>Notifications</Text>
+          <Text
+            style={[
+              styles.metricValue,
+              {
+                color: METRIC_TONE_COLOR[
+                  toneForNotificationsPercent(funnel?.notificationsOnPercent ?? null)
+                ],
+              },
+            ]}
+          >
+            {funnel?.notificationsOnPercent != null
+              ? `${funnel.notificationsOnPercent.toFixed(0)}%`
+              : '—'}
+          </Text>
+          <Text style={styles.metricDeltaNeutral}>
+            {funnel != null
+              ? `${funnel.notificationsOn}/${funnel.cohortSize} last signups with push on`
+              : '—'}
+          </Text>
+        </View>
       </View>
       <View style={styles.metricRow}>
         <View style={styles.metricCard}>

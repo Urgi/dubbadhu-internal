@@ -11,6 +11,9 @@ export type RecentSignupFunnelRates = {
   premiumConverted: number
   premiumConversionPercent: number | null
   premiumConvertedThisWeek: number
+  /** Distinct cohort users with an Expo push token (OS notifications granted + registered). */
+  notificationsOn: number
+  notificationsOnPercent: number | null
 }
 
 /** @deprecated use RecentSignupFunnelRates */
@@ -35,7 +38,28 @@ function emptyRates(): RecentSignupFunnelRates {
     premiumConverted: 0,
     premiumConversionPercent: null,
     premiumConvertedThisWeek: 0,
+    notificationsOn: 0,
+    notificationsOnPercent: null,
   }
+}
+
+/** Cohort users who currently have an Expo push token registered. */
+export async function fetchCohortPushTokenUserIds(
+  client: SupabaseClient,
+  userIds: string[],
+): Promise<{ data: string[]; error: string | null }> {
+  const ids = userIds.filter((id) => id && !isAnalyticsExcludedUserId(id)).slice(0, 50)
+  if (ids.length === 0) return { data: [], error: null }
+
+  const { data, error } = await client.from('push_tokens').select('user_id').in('user_id', ids)
+  if (error) return { data: [], error: error.message }
+
+  const on = new Set<string>()
+  for (const row of data ?? []) {
+    const id = String((row as { user_id?: string }).user_id ?? '')
+    if (id) on.add(id)
+  }
+  return { data: [...on], error: null }
 }
 
 /**
@@ -50,6 +74,24 @@ export function isCleanStoreSubscriber(row: UserPremiumRow | null | undefined): 
 }
 
 export type CohortFirstEvent = { userId: string; firstAt: string }
+
+/**
+ * Distinct learners with any analytics event since `windowMs` ago (default 30 min).
+ * Uses `admin_count_users_active_since` — live “active now / online” count.
+ */
+export async function fetchUsersOnlineNow(
+  client: SupabaseClient,
+  windowMs = 30 * 60 * 1000,
+  countryScope: AnalyticsCountryScope = 'all',
+): Promise<{ data: number | null; error: string | null }> {
+  const since = new Date(Date.now() - windowMs).toISOString()
+  const { data, error } = await client.rpc('admin_count_users_active_since', {
+    p_since: since,
+    p_country_scope: countryScope,
+  })
+  if (error) return { data: null, error: error.message }
+  return { data: Number(data ?? 0), error: null }
+}
 
 /** First `event_name` timestamp per id — not the global newest-N events feed. */
 export async function fetchCohortFirstEventAt(
@@ -79,10 +121,11 @@ export async function fetchCohortFirstEventAt(
 }
 
 /**
- * Activation + paid premium among the newest registered learners (max 50).
+ * Activation + paid premium + notification opt-in among the newest registered learners (max 50).
  * - Activated = `activation_complete` for those user IDs (index on user_id, event_name)
  * - Premium = currently a clean store subscriber (isPremium + store + product_id)
  * - Premium this week = clean store sub who also has `premium_purchased` in the last 7 days
+ * - Notifications on = has a row in `push_tokens` (OS grant + Expo registration)
  * Pass `non_et` for store conversion (ET does not see the paywall).
  */
 export async function fetchRecentSignupFunnelRates(
@@ -101,12 +144,13 @@ export async function fetchRecentSignupFunnelRates(
   }
 
   const userIds = users.map((u) => u.id)
-  const [activatedRes, purchasedRes] = await Promise.all([
+  const [activatedRes, purchasedRes, pushRes] = await Promise.all([
     fetchCohortFirstEventAt(client, userIds, 'activation_complete'),
     fetchCohortFirstEventAt(client, userIds, 'premium_purchased'),
+    fetchCohortPushTokenUserIds(client, userIds),
   ])
 
-  const eventsError = activatedRes.error || purchasedRes.error
+  const eventsError = activatedRes.error || purchasedRes.error || pushRes.error
   const activated = new Set(activatedRes.data.map((row) => row.userId))
   const activatedThisWeek = new Set(
     activatedRes.data
@@ -137,6 +181,7 @@ export async function fetchRecentSignupFunnelRates(
     if (purchasedThisWeek.has(user.id)) premiumThisWeek.add(user.id)
   }
 
+  const notificationsOn = pushRes.data.length
   const cohortSize = users.length
   return {
     data: {
@@ -147,6 +192,8 @@ export async function fetchRecentSignupFunnelRates(
       premiumConverted: premium.size,
       premiumConversionPercent: cohortSize > 0 ? (premium.size / cohortSize) * 100 : null,
       premiumConvertedThisWeek: premiumThisWeek.size,
+      notificationsOn,
+      notificationsOnPercent: cohortSize > 0 ? (notificationsOn / cohortSize) * 100 : null,
     },
     error: eventsError,
   }

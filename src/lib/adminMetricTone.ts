@@ -10,6 +10,7 @@
  * - Active today = DAU / lifetime registered (Duo does not publish this; implied DAU/lifetime ~5–7%)
  * - Activation = last-50 first-lesson (industry first-value ~40–60%; Duo does not publish L1 %)
  * - Premium = last-50 non-ET clean store / Duo paid-of-MAU ~9%
+ * - Notifications = last-50 with Expo push_tokens (mobile push opt-in often ~35–55%)
  */
 
 export type MetricTone = 'good' | 'neutral' | 'bad'
@@ -27,6 +28,10 @@ export const ACTIVATION_PCT_OK = 40
 /** Last-≤50 non-ET clean store vs Duolingo paid/MAU ~9%. */
 export const PREMIUM_PCT_GOOD = 10
 export const PREMIUM_PCT_OK = 6
+
+/** Last-≤50 with an Expo push token (OS notifications granted + registered). */
+export const NOTIFICATIONS_PCT_GOOD = 50
+export const NOTIFICATIONS_PCT_OK = 35
 
 /**
  * Weekly paid conversions on an early path to ~300 paid/mo by month 6.
@@ -92,6 +97,13 @@ export function toneForActivationPercent(pct: number | null | undefined): Metric
   if (pct == null || !Number.isFinite(pct)) return 'neutral'
   if (pct >= ACTIVATION_PCT_GOOD) return 'good'
   if (pct < ACTIVATION_PCT_OK) return 'bad'
+  return 'neutral'
+}
+
+export function toneForNotificationsPercent(pct: number | null | undefined): MetricTone {
+  if (pct == null || !Number.isFinite(pct)) return 'neutral'
+  if (pct >= NOTIFICATIONS_PCT_GOOD) return 'good'
+  if (pct < NOTIFICATIONS_PCT_OK) return 'bad'
   return 'neutral'
 }
 
@@ -308,6 +320,38 @@ export function explainPremiumMetric(args: {
       weekWhy,
       '',
       `Benchmarks: rate ≥${PREMIUM_PCT_GOOD}% green · ${PREMIUM_PCT_OK}–${PREMIUM_PCT_GOOD - 1}% white · <${PREMIUM_PCT_OK}% red. Weekly paid: ≥${PREMIUM_WEEKLY_GOOD} green · ${PREMIUM_WEEKLY_OK}–${PREMIUM_WEEKLY_GOOD - 1} white · 0 with signups red. Only current store Premium with a product id counts.`,
+    ].join('\n'),
+  }
+}
+
+export function explainNotificationsMetric(args: {
+  percent: number | null
+  on: number | null
+  cohortSize: number | null
+}): MetricColorExplanation {
+  const pctTone = toneForNotificationsPercent(args.percent)
+  const pct = args.percent
+
+  let pctWhy: string
+  if (pct == null) pctWhy = 'Notifications rate unavailable.'
+  else if (pctTone === 'good') {
+    pctWhy = `${pct.toFixed(0)}% ≥${NOTIFICATIONS_PCT_GOOD}% — solid push opt-in for a consumer mobile app.`
+  } else if (pctTone === 'bad') {
+    pctWhy = `${pct.toFixed(0)}% <${NOTIFICATIONS_PCT_OK}% — weak OS notification opt-in; reminders and remote push will under-reach.`
+  } else {
+    pctWhy = `${pct.toFixed(0)}% is in the ${NOTIFICATIONS_PCT_OK}–${NOTIFICATIONS_PCT_GOOD - 1}% mobile push opt-in band.`
+  }
+  if (args.on != null && args.cohortSize != null) {
+    pctWhy += ` (${args.on}/${args.cohortSize} of last ≤50 signups have an Expo push token).`
+  }
+
+  return {
+    title: 'Notifications color',
+    message: [
+      `Rate: ${toneSentence(pctTone)}`,
+      pctWhy,
+      '',
+      `Counted as “on” when the user has a row in push_tokens (OS permission granted and Expo push registered — same pool as broadcast). Local-only reminders without a token are not counted. Benchmarks: ≥${NOTIFICATIONS_PCT_GOOD}% green · ${NOTIFICATIONS_PCT_OK}–${NOTIFICATIONS_PCT_GOOD - 1}% white · <${NOTIFICATIONS_PCT_OK}% red.`,
     ].join('\n'),
   }
 }

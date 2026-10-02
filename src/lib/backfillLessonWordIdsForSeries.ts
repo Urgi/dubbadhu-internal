@@ -151,13 +151,28 @@ function patchScreensInPlace(screens: unknown[], wordMap: Map<string, string>): 
     }
 
     if (type === 'speakingPractice') {
-      if (isBankWordUuid(cr.word_id)) continue
-      const afaan = String(cr.word ?? cr.prompt ?? '').trim()
-      if (!afaan) continue
-      const rowId = wordMap.get(afaan.toLowerCase())
-      if (!rowId) continue
-      cr.word_id = rowId.toLowerCase()
-      changed = true
+      if (Array.isArray(cr.phrases)) {
+        for (const phrase of cr.phrases) {
+          if (phrase == null || typeof phrase !== 'object' || Array.isArray(phrase)) continue
+          const rec = phrase as Record<string, unknown>
+          if (isBankWordUuid(rec.word_id)) continue
+          const afaan = String(rec.word ?? rec.prompt ?? rec.oromo ?? rec.text ?? '').trim()
+          if (!afaan) continue
+          const rowId = wordMap.get(afaan.toLowerCase())
+          if (!rowId) continue
+          rec.word_id = rowId.toLowerCase()
+          changed = true
+        }
+      } else if (!isBankWordUuid(cr.word_id)) {
+        const afaan = String(cr.word ?? cr.prompt ?? '').trim()
+        if (afaan) {
+          const rowId = wordMap.get(afaan.toLowerCase())
+          if (rowId) {
+            cr.word_id = rowId.toLowerCase()
+            changed = true
+          }
+        }
+      }
     }
 
     if (type === 'videoReview') {
