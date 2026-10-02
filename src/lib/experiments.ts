@@ -46,7 +46,7 @@ export const PAYWALL_FREE_N_V1: KnownExperiment = {
 
 export const TIMED_COMMENTS_V1: KnownExperiment = {
   key: 'timed_comments_v1',
-  title: 'Series-1 video · timed comments',
+  title: 'Series 1 + 4 video · timed comments',
   flagColumn: TIMED_COMMENTS_FLAG_COLUMN,
   arms: [
     { id: 'comments_on', label: 'Comments on' },
