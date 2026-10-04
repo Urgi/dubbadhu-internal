@@ -1,0 +1,6 @@
+# Local EAS archives must not be uploaded into cloud builds
+eas-local-*.ipa
+eas-local-*.aab
+*.ipa
+*.aab
+supabase/.temp/
