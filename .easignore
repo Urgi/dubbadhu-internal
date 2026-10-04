@@ -1,6 +1,42 @@
-# Local EAS archives must not be uploaded into cloud builds
+# .easignore replaces .gitignore for EAS uploads — keep both in sync for ignores.
+
+node_modules/
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+.metro-health-check*
+ios-build.log
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+.DS_Store
+*.pem
+
+.env
+.env*.local
+
+*.tsbuildinfo
+
+# generated native folders (admin uses prebuild on EAS)
+/ios
+/android
+
+# Local EAS archives / temp
 eas-local-*.ipa
 eas-local-*.aab
 *.ipa
 *.aab
 supabase/.temp/
+.git/
+.cursor/
