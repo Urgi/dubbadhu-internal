@@ -57,6 +57,29 @@ export async function uploadSeriesHomeCoverImage(
   return uploadSeriesCoverJpeg(localUri, path)
 }
 
+/**
+ * Tall redesign Home/Speak hero — portrait still. Different object from
+ * `list-cover.jpg` and `home-cover.jpg` so production covers stay put.
+ */
+export const SERIES_HERO_COVER_ASPECT_WIDTH = 390
+export const SERIES_HERO_COVER_ASPECT_HEIGHT = 520
+export const SERIES_HERO_COVER_OUTPUT_WIDTH = 780
+export const SERIES_HERO_COVER_OUTPUT_HEIGHT = 1040
+export const SERIES_HERO_COVER_ASPECT: [number, number] = [
+  SERIES_HERO_COVER_ASPECT_WIDTH,
+  SERIES_HERO_COVER_ASPECT_HEIGHT,
+]
+
+export async function uploadSeriesHeroCoverImage(
+  localUri: string,
+  seriesId: string,
+): Promise<{ publicUrl: string } | { error: string }> {
+  const safeId = seriesId.trim().replace(/[^a-zA-Z0-9_-]/g, '_')
+  const folder = safeId.toLowerCase()
+  const path = `${folder}/hero-cover.jpg`
+  return uploadSeriesCoverJpeg(localUri, path)
+}
+
 async function uploadSeriesCoverJpeg(
   localUri: string,
   path: string,

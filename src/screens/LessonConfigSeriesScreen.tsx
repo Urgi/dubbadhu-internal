@@ -61,8 +61,12 @@ import {
   SERIES_LIST_COVER_ASPECT_WIDTH,
   SERIES_LIST_COVER_DISPLAY_ASPECT_RATIO,
   SERIES_LIST_COVER_DISPLAY_SQUASH,
+  SERIES_HERO_COVER_ASPECT,
+  SERIES_HERO_COVER_OUTPUT_HEIGHT,
+  SERIES_HERO_COVER_OUTPUT_WIDTH,
   uploadSeriesListCoverImage,
   uploadSeriesHomeCoverImage,
+  uploadSeriesHeroCoverImage,
 } from '../lib/seriesListCover'
 import { HOME_CONTINUE_CARD_ASPECT } from '../lib/homeHeroCover'
 import supabase from '../lib/supabase'
@@ -178,16 +182,22 @@ export default function LessonConfigSeriesScreen({ navigation, route }: Props) {
   const [wordBankReviewError, setWordBankReviewError] = useState<string | null>(null)
   const [listCoverUrl, setListCoverUrl] = useState<string | null>(null)
   const [homeCoverUrl, setHomeCoverUrl] = useState<string | null>(null)
+  const [heroCoverUrl, setHeroCoverUrl] = useState<string | null>(null)
   const [listCoverPreviewNonce, setListCoverPreviewNonce] = useState(0)
   const [homeCoverPreviewNonce, setHomeCoverPreviewNonce] = useState(0)
+  const [heroCoverPreviewNonce, setHeroCoverPreviewNonce] = useState(0)
   const [coverUploading, setCoverUploading] = useState(false)
   const [homeCoverUploading, setHomeCoverUploading] = useState(false)
+  const [heroCoverUploading, setHeroCoverUploading] = useState(false)
   const [coverCropVisible, setCoverCropVisible] = useState(false)
   const [coverCropUri, setCoverCropUri] = useState<string | null>(null)
   const [coverCropSession, setCoverCropSession] = useState(0)
   const [homeCoverCropVisible, setHomeCoverCropVisible] = useState(false)
   const [homeCoverCropUri, setHomeCoverCropUri] = useState<string | null>(null)
   const [homeCoverCropSession, setHomeCoverCropSession] = useState(0)
+  const [heroCoverCropVisible, setHeroCoverCropVisible] = useState(false)
+  const [heroCoverCropUri, setHeroCoverCropUri] = useState<string | null>(null)
+  const [heroCoverCropSession, setHeroCoverCropSession] = useState(0)
   const [introVideoUrl, setIntroVideoUrl] = useState<string | null>(null)
   const [introVideoNoTranslationUrl, setIntroVideoNoTranslationUrl] = useState<string | null>(null)
   const [introVideoSaving, setIntroVideoSaving] = useState(false)
@@ -353,11 +363,24 @@ export default function LessonConfigSeriesScreen({ navigation, route }: Props) {
   const load = useCallback(async () => {
     setError('')
     try {
-      const { data: seriesRow, error: seriesErr } = await supabase
+      const seriesSelectWithHero =
+        'title,intro_script,intro_video_url,intro_video_no_translation_url,approved,audio_recorded,series_status,list_cover_url,home_cover_url,hero_cover_url'
+      const seriesSelectWithoutHero =
+        'title,intro_script,intro_video_url,intro_video_no_translation_url,approved,audio_recorded,series_status,list_cover_url,home_cover_url'
+      let { data: seriesRow, error: seriesErr } = await supabase
         .from('lesson_series')
-        .select('title,intro_script,intro_video_url,intro_video_no_translation_url,approved,audio_recorded,series_status,list_cover_url,home_cover_url')
+        .select(seriesSelectWithHero)
         .eq('id', seriesId)
         .maybeSingle()
+      if (seriesErr && /hero_cover_url/i.test(seriesErr.message || '')) {
+        const fallback = await supabase
+          .from('lesson_series')
+          .select(seriesSelectWithoutHero)
+          .eq('id', seriesId)
+          .maybeSingle()
+        seriesRow = fallback.data
+        seriesErr = fallback.error
+      }
 
       let resolvedStatus: LessonSeriesStatus = 'draft'
       let hasLessonSeriesRow = false
@@ -375,6 +398,7 @@ export default function LessonConfigSeriesScreen({ navigation, route }: Props) {
           series_status?: string | null
           list_cover_url?: string | null
           home_cover_url?: string | null
+          hero_cover_url?: string | null
           intro_video_url?: string | null
           intro_video_no_translation_url?: string | null
         }
@@ -389,6 +413,11 @@ export default function LessonConfigSeriesScreen({ navigation, route }: Props) {
           const rawHome = sr.home_cover_url
           const trimmedHome = typeof rawHome === 'string' ? rawHome.trim() : ''
           setHomeCoverUrl(trimmedHome || null)
+        }
+        {
+          const rawHero = sr.hero_cover_url
+          const trimmedHero = typeof rawHero === 'string' ? rawHero.trim() : ''
+          setHeroCoverUrl(trimmedHero || null)
         }
         {
           const rawV = sr.intro_video_url
@@ -414,6 +443,7 @@ export default function LessonConfigSeriesScreen({ navigation, route }: Props) {
         setIntroScript(null)
         setListCoverUrl(null)
         setHomeCoverUrl(null)
+        setHeroCoverUrl(null)
         resolvedStatus = 'draft'
         setSeriesStatus('draft')
       }
@@ -832,6 +862,122 @@ export default function LessonConfigSeriesScreen({ navigation, route }: Props) {
     }
     setHomeCoverUrl(null)
     setHomeCoverPreviewNonce((n) => n + 1)
+  }, [lessonSeriesRowExists, scriptEditable, role, seriesId, seriesStatus])
+
+  const persistHeroCoverFile = useCallback(
+    async (localUri: string) => {
+      if (shouldConfirmAdminLiveSeriesSave(role ?? undefined, seriesStatus)) {
+        const proceed = await confirmAdminLiveSeriesSave(seriesStatus, 'hero cover')
+        if (!proceed) return
+      }
+      setHeroCoverUploading(true)
+      const up = await uploadSeriesHeroCoverImage(localUri, seriesId)
+      if ('error' in up) {
+        setHeroCoverUploading(false)
+        Alert.alert(
+          'Could not upload hero cover',
+          `${up.error}\n\nCreate a public bucket "series-list-covers" if missing and run sql/storage_series_list_covers.sql in the Supabase SQL Editor.`,
+        )
+        return
+      }
+      const versionedUrl = listCoverUrlWithVersion(up.publicUrl)
+      const { data: rowAfter, error: dbErr } = await supabase
+        .from('lesson_series')
+        .update({ hero_cover_url: versionedUrl })
+        .eq('id', seriesId)
+        .select('id')
+        .maybeSingle()
+      setHeroCoverUploading(false)
+      if (dbErr) {
+        const missingCol = /hero_cover_url/i.test(dbErr.message || '')
+        Alert.alert(
+          missingCol ? 'Hero cover column missing' : 'Could not save URL',
+          missingCol
+            ? 'Apply the hero_cover_url migration on this Supabase project, then try again. Speak and Home covers were not changed.'
+            : withLessonSeriesRlsHint(dbErr.message),
+        )
+        return
+      }
+      if (!rowAfter) {
+        Alert.alert(
+          'Cover uploaded but not linked',
+          'Storage has the new file, but no lesson_series row matched this series id.',
+        )
+        return
+      }
+      setHeroCoverUrl(versionedUrl)
+      setHeroCoverPreviewNonce((n) => n + 1)
+      Alert.alert(
+        'Hero cover saved',
+        'Redesign Home and Speak heroes will use this after catalog refresh. Speak strip and Home continue card are unchanged.',
+      )
+    },
+    [role, seriesId, seriesStatus],
+  )
+
+  const pickHeroCover = useCallback(async () => {
+    if (!lessonSeriesRowExists) {
+      Alert.alert('Series row required', 'Save the series script once so a lesson_series row exists, then add a cover.')
+      return
+    }
+    if (!scriptEditable) {
+      Alert.alert('View only', 'Cover can be changed when the series is editable (same rules as script).')
+      return
+    }
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
+    if (!perm.granted) {
+      Alert.alert('Permission needed', 'Allow photo library access to choose a cover image.')
+      return
+    }
+    const picked = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: false,
+      quality: 1,
+    })
+    if (picked.canceled || !picked.assets?.[0]?.uri) return
+    setHeroCoverCropSession((s) => s + 1)
+    setHeroCoverCropUri(picked.assets[0].uri)
+    setHeroCoverCropVisible(true)
+  }, [lessonSeriesRowExists, scriptEditable])
+
+  const onHeroCoverCropCancel = useCallback(() => {
+    setHeroCoverCropVisible(false)
+    setHeroCoverCropUri(null)
+  }, [])
+
+  const onHeroCoverCropDone = useCallback(
+    async (croppedUri: string) => {
+      setHeroCoverCropVisible(false)
+      setHeroCoverCropUri(null)
+      await persistHeroCoverFile(croppedUri)
+    },
+    [persistHeroCoverFile],
+  )
+
+  const clearHeroCover = useCallback(async () => {
+    if (!lessonSeriesRowExists || !scriptEditable) return
+    if (shouldConfirmAdminLiveSeriesSave(role ?? undefined, seriesStatus)) {
+      const proceed = await confirmAdminLiveSeriesSave(seriesStatus, 'hero cover')
+      if (!proceed) return
+    }
+    setHeroCoverUploading(true)
+    const { error: dbErr } = await supabase
+      .from('lesson_series')
+      .update({ hero_cover_url: null })
+      .eq('id', seriesId)
+    setHeroCoverUploading(false)
+    if (dbErr) {
+      const missingCol = /hero_cover_url/i.test(dbErr.message || '')
+      Alert.alert(
+        missingCol ? 'Hero cover column missing' : 'Could not clear hero cover',
+        missingCol
+          ? 'Apply the hero_cover_url migration on this Supabase project first.'
+          : withLessonSeriesRlsHint(dbErr.message),
+      )
+      return
+    }
+    setHeroCoverUrl(null)
+    setHeroCoverPreviewNonce((n) => n + 1)
   }, [lessonSeriesRowExists, scriptEditable, role, seriesId, seriesStatus])
 
   const clearSpeakListCover = useCallback(async () => {
@@ -1423,6 +1569,7 @@ export default function LessonConfigSeriesScreen({ navigation, route }: Props) {
 
   const listCoverDisplayUri = listCoverPreviewUri(listCoverUrl, listCoverPreviewNonce)
   const homeCoverDisplayUri = listCoverPreviewUri(homeCoverUrl, homeCoverPreviewNonce)
+  const heroCoverDisplayUri = listCoverPreviewUri(heroCoverUrl, heroCoverPreviewNonce)
   const homePreviewUri = homeCoverDisplayUri ?? listCoverDisplayUri
 
   const listHeader = (
@@ -1529,6 +1676,54 @@ export default function LessonConfigSeriesScreen({ navigation, route }: Props) {
                 disabled={!scriptEditable || homeCoverUploading}
               >
                 <Text style={styles.secondaryBtnText}>Clear Home cover</Text>
+              </Pressable>
+            ) : null}
+          </View>
+
+          <AdminSectionHeader label="Home / Speak hero cover" emphasis="gold" />
+          <Text style={styles.coverHomeHint}>
+            Separate portrait still for the tall redesign hero. Does not change the Speak strip or Home continue card already in production. Leave empty to keep using those covers.
+          </Text>
+          <View style={styles.coverHeroPreviewOuter}>
+            {heroCoverDisplayUri ? (
+              <Image
+                key={heroCoverDisplayUri}
+                source={{ uri: heroCoverDisplayUri }}
+                style={styles.coverPreviewImage}
+                resizeMode="cover"
+              />
+            ) : (
+              <View style={styles.coverPreviewPlaceholder}>
+                <Text style={styles.coverPreviewPlaceholderText}>
+                  No hero cover — redesign uses Home continue or Speak cover until you add one.
+                </Text>
+              </View>
+            )}
+          </View>
+          <View style={styles.coverActionsRow}>
+            <Pressable
+              style={[
+                styles.secondaryBtn,
+                (!scriptEditable || heroCoverUploading || !lessonSeriesRowExists) &&
+                  styles.btnDisabledOpacity,
+              ]}
+              onPress={() => void pickHeroCover()}
+              disabled={!scriptEditable || heroCoverUploading || !lessonSeriesRowExists}
+            >
+              <Text style={styles.secondaryBtnText}>
+                {heroCoverUploading ? 'Working…' : 'Choose & position hero cover'}
+              </Text>
+            </Pressable>
+            {heroCoverUrl ? (
+              <Pressable
+                style={[
+                  styles.secondaryBtn,
+                  (!scriptEditable || heroCoverUploading) && styles.btnDisabledOpacity,
+                ]}
+                onPress={() => void clearHeroCover()}
+                disabled={!scriptEditable || heroCoverUploading}
+              >
+                <Text style={styles.secondaryBtnText}>Clear hero cover</Text>
               </Pressable>
             ) : null}
           </View>
@@ -2313,6 +2508,18 @@ export default function LessonConfigSeriesScreen({ navigation, route }: Props) {
         onCancel={onHomeCoverCropCancel}
         onDone={onHomeCoverCropDone}
       />
+      <SeriesListCoverCropModal
+        key={`hero-cover-crop-${heroCoverCropSession}`}
+        visible={heroCoverCropVisible}
+        imageUri={heroCoverCropUri}
+        variant="speak"
+        aspectWidth={SERIES_HERO_COVER_ASPECT[0]}
+        aspectHeight={SERIES_HERO_COVER_ASPECT[1]}
+        outputWidth={SERIES_HERO_COVER_OUTPUT_WIDTH}
+        outputHeight={SERIES_HERO_COVER_OUTPUT_HEIGHT}
+        onCancel={onHeroCoverCropCancel}
+        onDone={onHeroCoverCropDone}
+      />
     </View>
   )
 }
@@ -2372,6 +2579,17 @@ const styles = StyleSheet.create({
   },
   coverHomePreview: {
     marginBottom: 12,
+  },
+  coverHeroPreviewOuter: {
+    width: '56%',
+    aspectRatio: 390 / 520,
+    borderRadius: 10,
+    overflow: 'hidden',
+    backgroundColor: '#0a1410',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#38383a',
+    marginBottom: 10,
+    alignSelf: 'flex-start',
   },
   coverActionsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   statusBlock: { marginBottom: 8 },
