@@ -1,5 +1,5 @@
 import { useFocusEffect } from '@react-navigation/native'
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
@@ -12,6 +12,7 @@ import {
 } from 'react-native'
 import Svg, { Circle } from 'react-native-svg'
 import type { StackScreenProps } from '@react-navigation/stack'
+import { ADMIN_ACCENT_GOLD } from '../components/lesson-config/AdminLessonConfigChrome'
 import SeriesPipelineBlock from '../components/SeriesPipelineBlock'
 import {
   summarizeReliabilityEvents24h,
@@ -57,11 +58,11 @@ type RetentionRow = {
 type RetentionRange = '7d' | '30d' | 'all'
 type CountryScope = AnalyticsCountryScope
 
-const ORANGE = '#f5a623'
-const PURPLE = '#5b5bd6'
-const PURPLE_BAR = '#7b4fcd'
-const CARD_BG = '#1c1c1e'
-const SCREEN_BG = '#111111'
+const GOLD = ADMIN_ACCENT_GOLD
+const GOLD_SOFT = '#E8C547'
+const CARD_BG = '#141414'
+const SCREEN_BG = '#000000'
+const HAIRLINE = '#2a2a2a'
 
 function ymdUTC(d: Date): string {
   return d.toISOString().slice(0, 10)
@@ -164,30 +165,62 @@ export default function AdminAnalyticsScreen({ navigation }: Props) {
   const [retentionRange, setRetentionRange] = useState<RetentionRange>('30d')
   const [countryScope, setCountryScope] = useState<CountryScope>('all')
   const [seriesPipeline, setSeriesPipeline] = useState<ProductionSeriesPipeline | null>(null)
+  const [healthRecentOpen, setHealthRecentOpen] = useState(false)
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false)
+  const hasLoadedOnceRef = useRef(false)
 
   const load = useCallback(async () => {
     const errs: string[] = []
     const scope = countryScope === 'et' || countryScope === 'non_et' ? countryScope : 'all'
+    const weekAgoIso = new Date(Date.now() - 7 * 86400000).toISOString()
+    const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
 
-    const usersRes = await supabase.rpc('admin_users_total_count', {
-      p_country_scope: scope,
-    })
+    const [
+      usersRes,
+      usersWeekRes,
+      evToday,
+      onlineRes,
+      funnelRes,
+      premiumRes,
+      retRes,
+      wlRes,
+      tutorRes,
+      ev24Res,
+      pipelineRes,
+    ] = await Promise.all([
+      supabase.rpc('admin_users_total_count', { p_country_scope: scope }),
+      supabase.rpc('admin_users_count_since', {
+        p_since: weekAgoIso,
+        p_country_scope: scope,
+      }),
+      supabase.rpc('admin_count_active_users_today', { p_country_scope: scope }),
+      fetchUsersOnlineNow(supabase, 30 * 60 * 1000, scope),
+      fetchRecentSignupFunnelRates(supabase, 50, scope),
+      // Premium is always non-ET — paywall does not show in Ethiopia.
+      fetchRecentSignupFunnelRates(supabase, 50, 'non_et'),
+      supabase.rpc('admin_get_retention_cohorts', {
+        p_limit: 500,
+        p_country_scope: scope,
+      }),
+      supabase.rpc('admin_waitlist_by_language'),
+      supabase.rpc('admin_learning_interest_counts'),
+      supabase.rpc('admin_fetch_analytics_events', {
+        p_since: since24h,
+        p_limit: 500,
+        p_offset: 0,
+        p_country_scope: scope,
+      }),
+      fetchProductionSeriesPipeline(supabase),
+    ])
+
     if (usersRes.error) errs.push(`users: ${usersRes.error.message}`)
     else setUsersTotal(Number(usersRes.data ?? 0))
 
-    const weekAgoIso = new Date(Date.now() - 7 * 86400000).toISOString()
-    const usersWeekRes = await supabase.rpc('admin_users_count_since', {
-      p_since: weekAgoIso,
-      p_country_scope: scope,
-    })
     if (usersWeekRes.error) {
       errs.push(`users (week): ${usersWeekRes.error.message}`)
       setUsersThisWeek(null)
     } else setUsersThisWeek(Number(usersWeekRes.data ?? 0))
 
-    const evToday = await supabase.rpc('admin_count_active_users_today', {
-      p_country_scope: scope,
-    })
     if (evToday.error) {
       if (!evToday.error.message.includes('does not exist')) {
         errs.push(`analytics_events (today): ${evToday.error.message}`)
@@ -197,7 +230,6 @@ export default function AdminAnalyticsScreen({ navigation }: Props) {
       setActiveToday(Number(evToday.data ?? 0))
     }
 
-    const onlineRes = await fetchUsersOnlineNow(supabase, 30 * 60 * 1000, scope)
     if (onlineRes.error) {
       errs.push(`active now: ${onlineRes.error}`)
       setOnlineNow(null)
@@ -205,18 +237,12 @@ export default function AdminAnalyticsScreen({ navigation }: Props) {
       setOnlineNow(onlineRes.data)
     }
 
-    const funnelRes = await fetchRecentSignupFunnelRates(supabase, 50)
     if (funnelRes.error) errs.push(`activation: ${funnelRes.error}`)
     setFunnel(funnelRes.data)
 
-    const premiumRes = await fetchRecentSignupFunnelRates(supabase, 50, 'non_et')
     if (premiumRes.error) errs.push(`premium (non-ET): ${premiumRes.error}`)
     setPremiumFunnel(premiumRes.data)
 
-    const retRes = await supabase.rpc('admin_get_retention_cohorts', {
-      p_limit: 500,
-      p_country_scope: scope,
-    })
     if (retRes.error) errs.push(`retention_cohorts: ${retRes.error.message}`)
     else
       setRetention(
@@ -230,7 +256,6 @@ export default function AdminAnalyticsScreen({ navigation }: Props) {
         })) ?? [],
       )
 
-    const wlRes = await supabase.rpc('admin_waitlist_by_language')
     if (wlRes.error) errs.push(`waitlist_signups: ${wlRes.error.message}`)
     else {
       setWaitlistByLang(
@@ -241,7 +266,6 @@ export default function AdminAnalyticsScreen({ navigation }: Props) {
       )
     }
 
-    const tutorRes = await supabase.rpc('admin_learning_interest_counts')
     if (tutorRes.error) {
       errs.push(`learning_interest: ${tutorRes.error.message}`)
       setTutorInterestCount(null)
@@ -252,13 +276,6 @@ export default function AdminAnalyticsScreen({ navigation }: Props) {
       )
     }
 
-    const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
-    const ev24Res = await supabase.rpc('admin_fetch_analytics_events', {
-      p_since: since24h,
-      p_limit: 500,
-      p_offset: 0,
-      p_country_scope: scope,
-    })
     if (ev24Res.error) {
       errs.push(`analytics_events (24h): ${ev24Res.error.message}`)
       setReliability24h(null)
@@ -273,11 +290,12 @@ export default function AdminAnalyticsScreen({ navigation }: Props) {
       setReliability24h(summarizeReliabilityEvents24h(rows))
     }
 
-    const pipelineRes = await fetchProductionSeriesPipeline(supabase)
     if (pipelineRes.error) errs.push(`series pipeline: ${pipelineRes.error}`)
     setSeriesPipeline(pipelineRes.data)
 
     setLoadErrors(errs)
+    hasLoadedOnceRef.current = true
+    setHasLoadedOnce(true)
   }, [countryScope])
 
   const retentionSlice = useMemo(() => cohortsInRange(retention, retentionRange), [retention, retentionRange])
@@ -299,9 +317,13 @@ export default function AdminAnalyticsScreen({ navigation }: Props) {
     useCallback(() => {
       let cancelled = false
       void (async () => {
-        setLoading(true)
+        if (!hasLoadedOnceRef.current) setLoading(true)
+        else setRefreshing(true)
         await load()
-        if (!cancelled) setLoading(false)
+        if (!cancelled) {
+          setLoading(false)
+          setRefreshing(false)
+        }
       })()
       return () => {
         cancelled = true
@@ -313,7 +335,7 @@ export default function AdminAnalyticsScreen({ navigation }: Props) {
     useCallback(() => {
       navigation.setOptions({
         title: 'Analytics',
-        headerTintColor: ORANGE,
+        headerTintColor: GOLD,
         headerTitleStyle: { color: '#fff', fontWeight: '600' },
         headerStyle: { backgroundColor: SCREEN_BG },
       })
@@ -340,20 +362,33 @@ export default function AdminAnalyticsScreen({ navigation }: Props) {
     )
   }, [])
 
-  if (loading) {
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color={ORANGE} />
-      </View>
-    )
-  }
+  const openUsers = useCallback(
+    (
+      mode:
+        | 'registered'
+        | 'activeToday'
+        | 'activeNow'
+        | 'notifications'
+        | 'activated'
+        | 'premium',
+    ) => {
+      navigation.navigate('AdminUsers', {
+        mode: mode === 'registered' ? undefined : mode,
+        countryScope:
+          mode === 'premium' ? 'non_et' : countryScope === 'all' ? undefined : countryScope,
+      })
+    },
+    [navigation, countryScope],
+  )
+
+  const showSkeleton = loading && !hasLoadedOnce
 
   return (
     <ScrollView
       style={styles.screen}
       contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled"
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={ORANGE} />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={GOLD} />}
     >
       {loadErrors.length > 0 ? (
         <View style={styles.warnBox}>
@@ -398,15 +433,18 @@ export default function AdminAnalyticsScreen({ navigation }: Props) {
         </Text>
       ) : null}
 
-      <Text style={styles.sectionLabel}>Users</Text>
+      {showSkeleton ? (
+        <View style={styles.skeletonBanner}>
+          <ActivityIndicator color={GOLD} />
+          <Text style={styles.skeletonBannerText}>Loading pulse…</Text>
+        </View>
+      ) : null}
+
+      <Text style={styles.sectionLabel}>Pulse</Text>
       <View style={styles.metricRow}>
         <Pressable
           style={styles.metricCard}
-          onPress={() =>
-            navigation.navigate('AdminUsers', {
-              countryScope: countryScope === 'all' ? undefined : countryScope,
-            })
-          }
+          onPress={() => openUsers('registered')}
           accessibilityRole="button"
           accessibilityLabel="View registered users"
         >
@@ -417,7 +455,7 @@ export default function AdminAnalyticsScreen({ navigation }: Props) {
               { color: METRIC_TONE_COLOR[toneForRegisteredTotal(usersTotal)] },
             ]}
           >
-            {usersTotal ?? '—'}
+            {showSkeleton ? '···' : usersTotal ?? '—'}
           </Text>
           <Text
             style={[
@@ -430,12 +468,7 @@ export default function AdminAnalyticsScreen({ navigation }: Props) {
         </Pressable>
         <Pressable
           style={styles.metricCard}
-          onPress={() =>
-            navigation.navigate('AdminUsers', {
-              mode: 'activeToday',
-              countryScope: countryScope === 'all' ? undefined : countryScope,
-            })
-          }
+          onPress={() => openUsers('activeToday')}
           accessibilityRole="button"
           accessibilityLabel="View users active today"
         >
@@ -454,12 +487,29 @@ export default function AdminAnalyticsScreen({ navigation }: Props) {
         </Pressable>
       </View>
       <View style={styles.metricRow}>
-        <View style={styles.metricCard}>
+        <Pressable
+          style={styles.metricCard}
+          onPress={() => openUsers('activeNow')}
+          accessibilityRole="button"
+          accessibilityLabel="View users active now"
+        >
           <Text style={styles.metricLabel}>Active now</Text>
-          <Text style={styles.metricValue}>{onlineNow != null ? onlineNow : '—'}</Text>
+          <Text style={styles.metricValue}>
+            {showSkeleton ? '···' : onlineNow != null ? onlineNow : '—'}
+          </Text>
           <Text style={styles.metricDeltaNeutral}>Online last 30 min</Text>
-        </View>
-        <View style={styles.metricCard}>
+        </Pressable>
+      </View>
+
+      <Text style={styles.sectionLabel}>Last 50 signups</Text>
+      <Text style={styles.sectionHint}>Premium stays non-ET always.</Text>
+      <View style={styles.metricRow}>
+        <Pressable
+          style={styles.metricCard}
+          onPress={() => openUsers('notifications')}
+          accessibilityRole="button"
+          accessibilityLabel="View last-50 users with notifications on"
+        >
           <Text style={styles.metricLabel}>Notifications</Text>
           <Text
             style={[
@@ -471,19 +521,24 @@ export default function AdminAnalyticsScreen({ navigation }: Props) {
               },
             ]}
           >
-            {funnel?.notificationsOnPercent != null
-              ? `${funnel.notificationsOnPercent.toFixed(0)}%`
-              : '—'}
+            {showSkeleton
+              ? '···'
+              : funnel?.notificationsOnPercent != null
+                ? `${funnel.notificationsOnPercent.toFixed(0)}%`
+                : '—'}
           </Text>
           <Text style={styles.metricDeltaNeutral}>
             {funnel != null
-              ? `${funnel.notificationsOn}/${funnel.cohortSize} last signups with push on`
+              ? `${funnel.notificationsOn}/${funnel.cohortSize} with push on`
               : '—'}
           </Text>
-        </View>
-      </View>
-      <View style={styles.metricRow}>
-        <View style={styles.metricCard}>
+        </Pressable>
+        <Pressable
+          style={styles.metricCard}
+          onPress={() => openUsers('activated')}
+          accessibilityRole="button"
+          accessibilityLabel="View last-50 activated users"
+        >
           <Text style={styles.metricLabel}>Activation</Text>
           <Text
             style={[
@@ -493,7 +548,11 @@ export default function AdminAnalyticsScreen({ navigation }: Props) {
               },
             ]}
           >
-            {funnel?.activationPercent != null ? `${funnel.activationPercent.toFixed(0)}%` : '—'}
+            {showSkeleton
+              ? '···'
+              : funnel?.activationPercent != null
+                ? `${funnel.activationPercent.toFixed(0)}%`
+                : '—'}
           </Text>
           <Text
             style={[
@@ -506,11 +565,18 @@ export default function AdminAnalyticsScreen({ navigation }: Props) {
             ]}
           >
             {funnel != null
-              ? `${funnel.activated}/${funnel.cohortSize} last signups · +${funnel.activatedThisWeek} this week`
+              ? `${funnel.activated}/${funnel.cohortSize} · +${funnel.activatedThisWeek} this week`
               : '—'}
           </Text>
-        </View>
-        <View style={styles.metricCard}>
+        </Pressable>
+      </View>
+      <View style={styles.metricRow}>
+        <Pressable
+          style={styles.metricCard}
+          onPress={() => openUsers('premium')}
+          accessibilityRole="button"
+          accessibilityLabel="View last-50 non-ET premium users"
+        >
           <Text style={styles.metricLabel}>Premium (non-ET)</Text>
           <Text
             style={[
@@ -522,9 +588,11 @@ export default function AdminAnalyticsScreen({ navigation }: Props) {
               },
             ]}
           >
-            {premiumFunnel?.premiumConversionPercent != null
-              ? `${premiumFunnel.premiumConversionPercent.toFixed(0)}%`
-              : '—'}
+            {showSkeleton
+              ? '···'
+              : premiumFunnel?.premiumConversionPercent != null
+                ? `${premiumFunnel.premiumConversionPercent.toFixed(0)}%`
+                : '—'}
           </Text>
           <Text
             style={[
@@ -533,17 +601,17 @@ export default function AdminAnalyticsScreen({ navigation }: Props) {
                 color: METRIC_TONE_COLOR[
                   toneForWeeklyPremiumDelta(
                     premiumFunnel?.premiumConvertedThisWeek ?? null,
-                    usersThisWeek,
+                    countryScope === 'et' ? null : usersThisWeek,
                   )
                 ],
               },
             ]}
           >
             {premiumFunnel != null
-              ? `${premiumFunnel.premiumConverted}/${premiumFunnel.cohortSize} last signups · +${premiumFunnel.premiumConvertedThisWeek} this week`
+              ? `${premiumFunnel.premiumConverted}/${premiumFunnel.cohortSize} · +${premiumFunnel.premiumConvertedThisWeek} this week`
               : '—'}
           </Text>
-        </View>
+        </Pressable>
       </View>
 
       <Text style={styles.sectionLabel}>Series config</Text>
@@ -598,19 +666,34 @@ export default function AdminAnalyticsScreen({ navigation }: Props) {
             ))}
             {reliability24h.recent.length > 0 ? (
               <>
-                <Text style={styles.healthRecentTitle}>Recent</Text>
-                {reliability24h.recent.map((row, i) => (
-                  <View key={`${row.created_at}-${row.event_name}-${i}`} style={styles.healthRecentRow}>
-                    <Text style={styles.healthRecentMeta}>
-                      {row.created_at.replace('T', ' ').slice(0, 19)} ·{' '}
-                      {row.user_id ? row.user_id.slice(0, 8) : 'anon'}
-                    </Text>
-                    <Text style={styles.healthRecentEvent}>{row.event_name}</Text>
-                    <Text style={styles.healthRecentDetail} numberOfLines={2}>
-                      {row.detail}
-                    </Text>
-                  </View>
-                ))}
+                <Pressable
+                  onPress={() => setHealthRecentOpen((v) => !v)}
+                  style={styles.healthRecentToggle}
+                  accessibilityRole="button"
+                  accessibilityLabel={healthRecentOpen ? 'Hide recent events' : 'Show recent events'}
+                >
+                  <Text style={styles.healthRecentTitle}>
+                    Recent ({reliability24h.recent.length})
+                  </Text>
+                  <Text style={styles.healthRecentChevron}>{healthRecentOpen ? '▾' : '▸'}</Text>
+                </Pressable>
+                {healthRecentOpen
+                  ? reliability24h.recent.map((row, i) => (
+                      <View
+                        key={`${row.created_at}-${row.event_name}-${i}`}
+                        style={styles.healthRecentRow}
+                      >
+                        <Text style={styles.healthRecentMeta}>
+                          {row.created_at.replace('T', ' ').slice(0, 19)} ·{' '}
+                          {row.user_id ? row.user_id.slice(0, 8) : 'anon'}
+                        </Text>
+                        <Text style={styles.healthRecentEvent}>{row.event_name}</Text>
+                        <Text style={styles.healthRecentDetail} numberOfLines={2}>
+                          {row.detail}
+                        </Text>
+                      </View>
+                    ))
+                  : null}
               </>
             ) : null}
           </>
@@ -659,9 +742,14 @@ export default function AdminAnalyticsScreen({ navigation }: Props) {
 
         {retentionStats ? (
           <View style={styles.retentionRow}>
-            <RetentionDonut pct={retentionStats.d1Pct} color={ORANGE} labelShort="D1" labelLong="Day 1" />
+            <RetentionDonut pct={retentionStats.d1Pct} color={GOLD} labelShort="D1" labelLong="Day 1" />
             <View style={styles.retentionDivider} />
-            <RetentionDonut pct={retentionStats.d7Pct} color={PURPLE} labelShort="D7" labelLong="Day 7" />
+            <RetentionDonut
+              pct={retentionStats.d7Pct}
+              color={GOLD_SOFT}
+              labelShort="D7"
+              labelLong="Day 7"
+            />
           </View>
         ) : (
           <Text style={styles.muted}>No cohort data in this time range.</Text>
@@ -682,7 +770,7 @@ export default function AdminAnalyticsScreen({ navigation }: Props) {
         ) : (
           waitlistByLang.map((w, i) => {
             const barPct = waitlistMax > 0 ? (w.count / waitlistMax) * 100 : 0
-            const barColor = i % 2 === 0 ? ORANGE : PURPLE_BAR
+            const barColor = i % 2 === 0 ? GOLD : GOLD_SOFT
             const isLast = i === waitlistByLang.length - 1
             return (
               <View key={w.language}>
@@ -748,59 +836,79 @@ export default function AdminAnalyticsScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: SCREEN_BG },
-  content: { paddingHorizontal: 14, paddingTop: 4, paddingBottom: 40 },
-  centered: {
-    flex: 1,
-    backgroundColor: SCREEN_BG,
+  content: { paddingHorizontal: 14, paddingTop: 8, paddingBottom: 48 },
+  skeletonBanner: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginBottom: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: HAIRLINE,
+    backgroundColor: CARD_BG,
   },
+  skeletonBannerText: { color: '#8e8e93', fontSize: 13, fontWeight: '500' },
   sectionLabel: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '700',
-    letterSpacing: 1.2,
-    color: '#666666',
+    letterSpacing: 1.4,
+    color: GOLD,
     textTransform: 'uppercase',
-    marginTop: 10,
-    marginBottom: 6,
-    marginHorizontal: 4,
+    marginTop: 14,
+    marginBottom: 4,
+    marginHorizontal: 2,
   },
-  metricRow: { flexDirection: 'row', gap: 8, marginBottom: 4 },
+  sectionHint: {
+    fontSize: 11,
+    color: '#636366',
+    lineHeight: 15,
+    marginBottom: 8,
+    marginHorizontal: 2,
+  },
+  metricRow: { flexDirection: 'row', gap: 8, marginBottom: 8 },
   metricCard: {
     flex: 1,
     backgroundColor: CARD_BG,
-    borderRadius: 14,
-    paddingVertical: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: HAIRLINE,
+    paddingVertical: 14,
     paddingHorizontal: 14,
   },
-  metricLabel: { fontSize: 11, color: '#888888', marginBottom: 4 },
-  metricValue: { fontSize: 26, fontWeight: '700', color: '#fff', lineHeight: 30 },
-  metricDelta: { fontSize: 11, marginTop: 4, fontWeight: '600' },
-  metricDeltaNeutral: { fontSize: 11, marginTop: 4, color: '#888888' },
+  metricLabel: { fontSize: 11, color: '#8e8e93', marginBottom: 6, fontWeight: '500' },
+  metricValue: { fontSize: 28, fontWeight: '700', color: '#fff', lineHeight: 32, letterSpacing: -0.4 },
+  metricDelta: { fontSize: 11, marginTop: 6, fontWeight: '600' },
+  metricDeltaNeutral: { fontSize: 11, marginTop: 6, color: '#8e8e93', lineHeight: 15 },
   card: {
     backgroundColor: CARD_BG,
-    borderRadius: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: HAIRLINE,
     paddingVertical: 14,
     paddingHorizontal: 16,
-    marginBottom: 4,
+    marginBottom: 8,
   },
   timeFilter: {
     flexDirection: 'row',
-    backgroundColor: '#2a2a2a',
-    borderRadius: 8,
-    padding: 2,
+    backgroundColor: '#1c1c1e',
+    borderRadius: 10,
+    padding: 3,
     marginBottom: 12,
   },
   countryFilter: {
     flexDirection: 'row',
-    backgroundColor: '#2a2a2a',
-    borderRadius: 8,
-    padding: 2,
+    backgroundColor: '#1c1c1e',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: HAIRLINE,
+    padding: 3,
     marginBottom: 8,
   },
   countryHint: {
     fontSize: 11,
-    color: '#666666',
+    color: '#636366',
     marginBottom: 10,
     lineHeight: 15,
   },
@@ -808,12 +916,12 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 5,
-    borderRadius: 6,
+    paddingVertical: 7,
+    borderRadius: 8,
   },
-  tfBtnActive: { backgroundColor: '#3a3a3c' },
-  tfBtnText: { fontSize: 11, color: '#888888', fontWeight: '500' },
-  tfBtnTextActive: { color: '#fff', fontWeight: '600' },
+  tfBtnActive: { backgroundColor: '#2c2c2e' },
+  tfBtnText: { fontSize: 12, color: '#8e8e93', fontWeight: '500' },
+  tfBtnTextActive: { color: '#fff', fontWeight: '700' },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -821,32 +929,32 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     gap: 8,
   },
-  cardTitle: { fontSize: 13, fontWeight: '600', color: '#fff', flexShrink: 0 },
+  cardTitle: { fontSize: 14, fontWeight: '600', color: '#fff', flexShrink: 0 },
   cardChevron: {
-    color: ORANGE,
+    color: GOLD,
     fontSize: 22,
     fontWeight: '300',
     lineHeight: 22,
   },
   cardHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, justifyContent: 'flex-end' },
-  cardSource: { fontSize: 10, color: '#555555', textAlign: 'right', flexShrink: 1 },
+  cardSource: { fontSize: 10, color: '#636366', textAlign: 'right', flexShrink: 1 },
   infoBtn: {
     width: 18,
     height: 18,
     borderRadius: 9,
     borderWidth: 1,
-    borderColor: '#444444',
+    borderColor: '#3a3a3c',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  infoBtnText: { fontSize: 10, color: '#666666', fontWeight: '600' },
+  infoBtnText: { fontSize: 10, color: '#8e8e93', fontWeight: '600' },
   retentionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
     paddingVertical: 6,
   },
-  retentionDivider: { width: 1, height: 60, backgroundColor: '#333333' },
+  retentionDivider: { width: 1, height: 60, backgroundColor: HAIRLINE },
   ringWrap: { alignItems: 'center', gap: 6 },
   ringSvgWrap: { width: 72, height: 72, position: 'relative' },
   svgRotateNeg90: {
@@ -861,8 +969,8 @@ const styles = StyleSheet.create({
     paddingBottom: 4,
   },
   ringPct: { color: '#fff', fontSize: 13, fontWeight: '700' },
-  ringRetained: { color: '#666666', fontSize: 9, marginTop: 0 },
-  ringLabel: { fontSize: 12, color: '#888888', fontWeight: '600', letterSpacing: 0.5 },
+  ringRetained: { color: '#636366', fontSize: 9, marginTop: 0 },
+  ringLabel: { fontSize: 12, color: '#8e8e93', fontWeight: '600', letterSpacing: 0.5 },
   ringSublabel: { fontSize: 10, color: '#555555', textAlign: 'center' },
   waitlistRow: {
     flexDirection: 'row',
@@ -870,21 +978,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#2a2a2a',
+    borderBottomColor: HAIRLINE,
   },
   waitlistRowLast: { borderBottomWidth: 0 },
   langName: { fontSize: 14, color: '#fff', fontWeight: '500', textTransform: 'capitalize' },
-  langCount: { fontSize: 18, fontWeight: '700', color: ORANGE },
+  langCount: { fontSize: 18, fontWeight: '700', color: GOLD },
   waitlistBarWrap: {
     height: 4,
-    backgroundColor: '#2a2a2a',
+    backgroundColor: '#1c1c1e',
     borderRadius: 2,
     marginTop: 8,
     overflow: 'hidden',
   },
   waitlistBar: { height: 4, borderRadius: 2 },
   waitlistSpacer: { height: 8 },
-  muted: { color: '#71717a', fontSize: 13, lineHeight: 18 },
+  muted: { color: '#8e8e93', fontSize: 13, lineHeight: 18 },
   warnBox: {
     backgroundColor: '#422006',
     borderRadius: 12,
@@ -898,39 +1006,47 @@ const styles = StyleSheet.create({
   healthOk: { color: '#30d158', fontSize: 14, lineHeight: 20 },
   healthStat: {
     flex: 1,
-    backgroundColor: '#2a2a2a',
-    borderRadius: 10,
+    backgroundColor: '#1c1c1e',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: HAIRLINE,
     paddingVertical: 10,
     paddingHorizontal: 12,
     alignItems: 'center',
   },
   healthStatValue: { fontSize: 22, fontWeight: '700', color: '#fff' },
-  healthStatLabel: { fontSize: 10, color: '#888', marginTop: 2 },
+  healthStatLabel: { fontSize: 10, color: '#8e8e93', marginTop: 2 },
   healthCountRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: 6,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#2a2a2a',
+    borderBottomColor: HAIRLINE,
   },
   healthEventName: { color: '#fca5a5', fontSize: 13, flex: 1, marginRight: 8 },
   healthEventCount: { color: '#fff', fontWeight: '700', fontSize: 15 },
-  healthRecentTitle: {
+  healthRecentToggle: {
     marginTop: 12,
-    marginBottom: 6,
+    marginBottom: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  healthRecentTitle: {
     fontSize: 10,
     fontWeight: '700',
     letterSpacing: 1,
-    color: '#666',
+    color: '#8e8e93',
     textTransform: 'uppercase',
   },
+  healthRecentChevron: { color: GOLD, fontSize: 14, fontWeight: '600' },
   healthRecentRow: {
     paddingVertical: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#2a2a2a',
+    borderBottomColor: HAIRLINE,
   },
-  healthRecentMeta: { color: '#666', fontSize: 10, marginBottom: 2 },
+  healthRecentMeta: { color: '#636366', fontSize: 10, marginBottom: 2 },
   healthRecentEvent: { color: '#fff', fontSize: 13, fontWeight: '600' },
   healthRecentDetail: { color: '#a1a1aa', fontSize: 12, marginTop: 2, lineHeight: 16 },
 })

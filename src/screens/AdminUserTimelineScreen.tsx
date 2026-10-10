@@ -1,9 +1,17 @@
 import { useFocusEffect } from '@react-navigation/native'
-import { useCallback, useLayoutEffect, useState } from 'react'
+import { useCallback, useLayoutEffect, useMemo, useState } from 'react'
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native'
 import type { StackScreenProps } from '@react-navigation/stack'
 import { ADMIN_ACCENT_GOLD } from '../components/lesson-config/AdminLessonConfigChrome'
 import { registeredUserDisplayName } from '../lib/adminUsers'
+import {
+  fetchDeviceInfoForUserIds,
+  platformLabel,
+  readAppVersionFromProperties,
+  readPlatformFromProperties,
+  type AdminDeviceInfo,
+  type AdminDevicePlatform,
+} from '../lib/adminDevicePlatform'
 import {
   fetchUserAnalyticsEvents,
   type AnalyticsEventRow,
@@ -20,12 +28,56 @@ import type { RootStackParamList } from '../types'
 type Props = StackScreenProps<RootStackParamList, 'AdminUserTimeline'>
 
 const RECENT_EVENT_LIMIT = 20
+const GOLD = ADMIN_ACCENT_GOLD
+const CARD_BG = '#141414'
+const HAIRLINE = '#2a2a2a'
+
+function formatEventWhen(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return iso.replace('T', ' ').slice(0, 19)
+  return d.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+}
+
+function PlatformChip({
+  platform,
+  appVersion,
+}: {
+  platform: AdminDevicePlatform | null | undefined
+  appVersion?: string | null
+}) {
+  const label = platformLabel(platform)
+  if (label === '—') {
+    return (
+      <View style={[styles.chip, styles.chipMuted]}>
+        <Text style={styles.chipTextMuted}>OS unknown</Text>
+      </View>
+    )
+  }
+  return (
+    <View style={styles.chip}>
+      <Text style={styles.chipText}>
+        {label}
+        {appVersion ? ` · ${appVersion}` : ''}
+      </Text>
+    </View>
+  )
+}
 
 export default function AdminUserTimelineScreen({ navigation, route }: Props) {
   const user = route.params.user
   const [timeline, setTimeline] = useState<RecentSignupTimeline | null>(null)
   const [recentEvents, setRecentEvents] = useState<AnalyticsEventRow[]>([])
   const [lessonLabels, setLessonLabels] = useState<Record<string, string>>({})
+  const [device, setDevice] = useState<AdminDeviceInfo | null>(
+    user.platform
+      ? { platform: user.platform, appVersion: user.app_version ?? null }
+      : null,
+  )
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [eventsError, setEventsError] = useState('')
@@ -33,9 +85,10 @@ export default function AdminUserTimelineScreen({ navigation, route }: Props) {
   const load = useCallback(async () => {
     setError('')
     setEventsError('')
-    const [timelineRes, eventsRes] = await Promise.all([
+    const [timelineRes, eventsRes, deviceMap] = await Promise.all([
       fetchSignupTimelineForUser(supabase, user),
       fetchUserAnalyticsEvents(supabase, user.id, RECENT_EVENT_LIMIT),
+      fetchDeviceInfoForUserIds(supabase, [user.id]),
     ])
 
     if (timelineRes.error && !timelineRes.data) {
@@ -46,6 +99,9 @@ export default function AdminUserTimelineScreen({ navigation, route }: Props) {
       setTimeline(timelineRes.data)
     }
 
+    const fromMap = deviceMap.get(user.id)
+    if (fromMap) setDevice(fromMap)
+
     if (eventsRes.error) {
       setEventsError(eventsRes.error)
       setRecentEvents([])
@@ -53,6 +109,24 @@ export default function AdminUserTimelineScreen({ navigation, route }: Props) {
     } else {
       setRecentEvents(eventsRes.data)
       setLessonLabels(await fetchLessonDisplayLabels(supabase, uniqueLessonIds(eventsRes.data)))
+      if (!fromMap || fromMap.platform === 'unknown' || !fromMap.appVersion) {
+        for (const ev of eventsRes.data) {
+          const p = readPlatformFromProperties(ev.properties)
+          const v = readAppVersionFromProperties(ev.properties)
+          if (p !== 'unknown' || v) {
+            setDevice((prev) => ({
+              platform:
+                prev?.platform && prev.platform !== 'unknown'
+                  ? prev.platform
+                  : p !== 'unknown'
+                    ? p
+                    : 'unknown',
+              appVersion: prev?.appVersion ?? v,
+            }))
+            break
+          }
+        }
+      }
     }
   }, [user])
 
@@ -75,14 +149,19 @@ export default function AdminUserTimelineScreen({ navigation, route }: Props) {
       title: registeredUserDisplayName(user),
       headerStyle: { backgroundColor: '#000000' },
       headerTitleStyle: { fontSize: 15, fontWeight: '700', color: '#ffffff' },
-      headerTintColor: '#ffffff',
+      headerTintColor: GOLD,
     })
   }, [navigation, user])
+
+  const headerMeta = useMemo(() => {
+    const parts = [timeline?.title?.split('·')[1]?.trim()].filter(Boolean)
+    return parts.join(' · ')
+  }, [timeline])
 
   if (loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color={ADMIN_ACCENT_GOLD} />
+        <ActivityIndicator size="large" color={GOLD} />
       </View>
     )
   }
@@ -90,26 +169,36 @@ export default function AdminUserTimelineScreen({ navigation, route }: Props) {
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       {error ? <Text style={styles.errorBanner}>{error}</Text> : null}
-      {timeline ? (
-        <View style={styles.card}>
-          <Text style={styles.title}>{timeline.title}</Text>
-          <Text style={styles.summary}>{timeline.lessonSummary}</Text>
-          {timeline.steps.map((step, si) => (
-            <View key={`${timeline.userId}-${si}-${step.label}`} style={styles.step}>
-              <View style={styles.dotCol}>
-                <View style={styles.dot} />
-                {si < timeline.steps.length - 1 ? <View style={styles.line} /> : null}
-              </View>
-              <View style={styles.stepBody}>
-                <Text style={styles.stepLabel}>{step.label}</Text>
-                {step.detail ? <Text style={styles.stepDetail}>{step.detail}</Text> : null}
-              </View>
-            </View>
-          ))}
+
+      <View style={styles.card}>
+        <View style={styles.cardTop}>
+          <View style={styles.cardTopText}>
+            <Text style={styles.title}>{registeredUserDisplayName(user)}</Text>
+            {user.phone ? <Text style={styles.phone}>{user.phone}</Text> : null}
+            {headerMeta ? <Text style={styles.region}>{headerMeta}</Text> : null}
+          </View>
+          <PlatformChip platform={device?.platform} appVersion={device?.appVersion} />
         </View>
-      ) : (
-        <Text style={styles.empty}>No timeline available.</Text>
-      )}
+        {timeline ? (
+          <>
+            <Text style={styles.summary}>{timeline.lessonSummary}</Text>
+            {timeline.steps.map((step, si) => (
+              <View key={`${timeline.userId}-${si}-${step.label}`} style={styles.step}>
+                <View style={styles.dotCol}>
+                  <View style={styles.dot} />
+                  {si < timeline.steps.length - 1 ? <View style={styles.line} /> : null}
+                </View>
+                <View style={styles.stepBody}>
+                  <Text style={styles.stepLabel}>{step.label}</Text>
+                  {step.detail ? <Text style={styles.stepDetail}>{step.detail}</Text> : null}
+                </View>
+              </View>
+            ))}
+          </>
+        ) : (
+          <Text style={styles.emptyInline}>No lesson timeline available.</Text>
+        )}
+      </View>
 
       <Text style={styles.sectionLabel}>Recent events</Text>
       <View style={styles.card}>
@@ -118,20 +207,30 @@ export default function AdminUserTimelineScreen({ navigation, route }: Props) {
         ) : recentEvents.length === 0 ? (
           <Text style={styles.emptyInline}>No analytics events for this user yet.</Text>
         ) : (
-          recentEvents.map((row, i) => (
-            <View
-              key={row.id || `${row.created_at}-${row.event_name}-${i}`}
-              style={[styles.eventRow, i === recentEvents.length - 1 && styles.eventRowLast]}
-            >
-              <Text style={styles.eventMeta}>
-                {row.created_at.replace('T', ' ').slice(0, 19)}
-              </Text>
-              <Text style={styles.eventName}>{row.event_name}</Text>
-              <Text style={styles.eventDetail} numberOfLines={3}>
-                {formatAnalyticsEventDetail(row.event_name, row.properties, lessonLabels)}
-              </Text>
-            </View>
-          ))
+          recentEvents.map((row, i) => {
+            const eventPlatform = readPlatformFromProperties(row.properties)
+            const eventVersion = readAppVersionFromProperties(row.properties)
+            return (
+              <View
+                key={row.id || `${row.created_at}-${row.event_name}-${i}`}
+                style={[styles.eventRow, i === recentEvents.length - 1 && styles.eventRowLast]}
+              >
+                <View style={styles.eventHead}>
+                  <Text style={styles.eventMeta}>{formatEventWhen(row.created_at)}</Text>
+                  {eventPlatform !== 'unknown' ? (
+                    <Text style={styles.eventOs}>
+                      {platformLabel(eventPlatform)}
+                      {eventVersion ? ` ${eventVersion}` : ''}
+                    </Text>
+                  ) : null}
+                </View>
+                <Text style={styles.eventName}>{row.event_name}</Text>
+                <Text style={styles.eventDetail} numberOfLines={3}>
+                  {formatAnalyticsEventDetail(row.event_name, row.properties, lessonLabels)}
+                </Text>
+              </View>
+            )
+          })
         )}
       </View>
     </ScrollView>
@@ -150,56 +249,84 @@ const styles = StyleSheet.create({
   errorBanner: {
     color: '#fca5a5',
     backgroundColor: '#450a0a',
-    borderRadius: 8,
+    borderRadius: 10,
     padding: 10,
     fontSize: 13,
     marginBottom: 12,
   },
-  empty: { color: '#6b7280', fontSize: 14, marginTop: 12 },
-  emptyInline: { color: '#6b7280', fontSize: 13 },
+  emptyInline: { color: '#636366', fontSize: 13 },
   inlineError: { color: '#fca5a5', fontSize: 13 },
   sectionLabel: {
-    color: '#9ca3af',
-    fontSize: 12,
+    color: GOLD,
+    fontSize: 11,
     fontWeight: '700',
-    letterSpacing: 0.6,
+    letterSpacing: 1.2,
     textTransform: 'uppercase',
     marginTop: 20,
     marginBottom: 8,
   },
   card: {
-    backgroundColor: '#111827',
-    borderRadius: 12,
+    backgroundColor: CARD_BG,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#1f2937',
+    borderColor: HAIRLINE,
     padding: 16,
   },
-  title: { fontSize: 16, fontWeight: '700', color: '#fff', marginBottom: 4 },
-  summary: { fontSize: 13, color: '#fbbf24', fontWeight: '600', marginBottom: 14 },
+  cardTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 10,
+    marginBottom: 10,
+  },
+  cardTopText: { flex: 1, minWidth: 0, gap: 2 },
+  title: { fontSize: 18, fontWeight: '700', color: '#fff' },
+  phone: { fontSize: 12, color: '#8e8e93' },
+  region: { fontSize: 12, color: '#8e8e93', marginTop: 2 },
+  chip: {
+    backgroundColor: 'rgba(212,175,55,0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(212,175,55,0.35)',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  chipMuted: { backgroundColor: '#1c1c1e', borderColor: HAIRLINE },
+  chipText: { color: GOLD, fontSize: 11, fontWeight: '700' },
+  chipTextMuted: { color: '#636366', fontSize: 11, fontWeight: '600' },
+  summary: { fontSize: 13, color: GOLD, fontWeight: '600', marginBottom: 14 },
   step: { flexDirection: 'row', alignItems: 'stretch', minHeight: 28 },
   dotCol: { width: 14, alignItems: 'center', paddingTop: 5 },
   dot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: ADMIN_ACCENT_GOLD,
+    backgroundColor: GOLD,
   },
   line: {
     flex: 1,
     width: 2,
-    backgroundColor: '#374151',
+    backgroundColor: HAIRLINE,
     marginTop: 2,
   },
   stepBody: { flex: 1, paddingBottom: 12, paddingLeft: 8 },
   stepLabel: { fontSize: 14, color: '#e5e7eb', fontWeight: '500' },
-  stepDetail: { fontSize: 12, color: '#888888', marginTop: 2 },
+  stepDetail: { fontSize: 12, color: '#8e8e93', marginTop: 2 },
   eventRow: {
-    paddingVertical: 10,
+    paddingVertical: 11,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#1f2937',
+    borderBottomColor: HAIRLINE,
   },
-  eventRowLast: { borderBottomWidth: 0, paddingBottom: 0 },
-  eventMeta: { color: '#666', fontSize: 10, marginBottom: 2 },
-  eventName: { color: '#fff', fontSize: 13, fontWeight: '600' },
-  eventDetail: { color: '#a1a1aa', fontSize: 12, marginTop: 2, lineHeight: 16 },
+  eventRowLast: { borderBottomWidth: 0 },
+  eventHead: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 3,
+  },
+  eventMeta: { color: '#636366', fontSize: 11, fontWeight: '500' },
+  eventOs: { color: GOLD, fontSize: 11, fontWeight: '700' },
+  eventName: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  eventDetail: { color: '#8e8e93', fontSize: 12, marginTop: 3, lineHeight: 16 },
 })

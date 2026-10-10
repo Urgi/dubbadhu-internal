@@ -110,7 +110,17 @@ function pickDetail(
     (typeof p.context === 'string' && p.context.trim()) ||
     ''
   if (msg) return msg.slice(0, 160)
-  const keys = Object.keys(p).slice(0, 3)
+  const skip = new Set([
+    'platform',
+    'os',
+    'app_version',
+    'appVersion',
+    'version',
+    'runtimeVersion',
+  ])
+  const keys = Object.keys(p)
+    .filter((k) => !skip.has(k))
+    .slice(0, 3)
   if (keys.length === 0) return '—'
   return keys.map((k) => `${k}: ${String(p[k]).slice(0, 40)}`).join(' · ')
 }

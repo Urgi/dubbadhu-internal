@@ -45,9 +45,18 @@ export type RootStackParamList = {
   AdminAnalytics: undefined
   /** Known learner A/B tests (flags on app_config + analytics_events results). */
   AdminExperiments: undefined
-  /** Registered learners list, or active-today (max 10) when mode is set. */
+  /** Registered / cohort drill-ins from Analytics (active, notifications, activated, premium…). */
   AdminUsers:
-    | { mode?: 'activeToday'; countryScope?: 'all' | 'et' | 'non_et' }
+    | {
+        mode?:
+          | 'registered'
+          | 'activeToday'
+          | 'activeNow'
+          | 'notifications'
+          | 'activated'
+          | 'premium'
+        countryScope?: 'all' | 'et' | 'non_et'
+      }
     | undefined
   /** Signup → lesson timeline for one user (from Active today / Registered). */
   AdminUserTimeline: { user: AdminRegisteredUserRow }

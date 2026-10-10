@@ -120,6 +120,53 @@ export async function fetchCohortFirstEventAt(
   }
 }
 
+type CohortPremiumRow = UserPremiumRow & { id?: string }
+
+/** Batch premium flags for a cohort — one query, not N× admin_find_user_by_id. */
+export async function fetchCohortPremiumRows(
+  client: SupabaseClient,
+  userIds: string[],
+): Promise<{ data: Map<string, UserPremiumRow>; error: string | null }> {
+  const ids = userIds.filter((id) => id && !isAnalyticsExcludedUserId(id)).slice(0, 50)
+  const out = new Map<string, UserPremiumRow>()
+  if (ids.length === 0) return { data: out, error: null }
+
+  const { data, error } = await client
+    .from('users')
+    .select('id, "isPremium", premium_source, premium_product_id')
+    .in('id', ids)
+
+  if (!error && data) {
+    for (const raw of data as CohortPremiumRow[]) {
+      const id = String(raw.id ?? '')
+      if (!id) continue
+      out.set(id, {
+        isPremium: raw.isPremium,
+        premium_source: raw.premium_source,
+        premium_product_id: raw.premium_product_id,
+      })
+    }
+    return { data: out, error: null }
+  }
+
+  // Fallback: parallel RPCs (still far faster than sequential).
+  const settled = await Promise.all(
+    ids.map(async (id) => {
+      const res = await client.rpc('admin_find_user_by_id', { p_user_id: id })
+      if (res.error) return null
+      const row = (Array.isArray(res.data) ? res.data[0] : res.data) as UserPremiumRow | undefined
+      return row ? ([id, row] as const) : null
+    }),
+  )
+  for (const pair of settled) {
+    if (pair) out.set(pair[0], pair[1])
+  }
+  return {
+    data: out,
+    error: out.size > 0 ? null : error?.message ?? 'premium cohort lookup failed',
+  }
+}
+
 /**
  * Activation + paid premium + notification opt-in among the newest registered learners (max 50).
  * - Activated = `activation_complete` for those user IDs (index on user_id, event_name)
@@ -144,10 +191,11 @@ export async function fetchRecentSignupFunnelRates(
   }
 
   const userIds = users.map((u) => u.id)
-  const [activatedRes, purchasedRes, pushRes] = await Promise.all([
+  const [activatedRes, purchasedRes, pushRes, premiumRes] = await Promise.all([
     fetchCohortFirstEventAt(client, userIds, 'activation_complete'),
     fetchCohortFirstEventAt(client, userIds, 'premium_purchased'),
     fetchCohortPushTokenUserIds(client, userIds),
+    fetchCohortPremiumRows(client, userIds),
   ])
 
   const eventsError = activatedRes.error || purchasedRes.error || pushRes.error
@@ -171,14 +219,12 @@ export async function fetchRecentSignupFunnelRates(
 
   const premium = new Set<string>()
   const premiumThisWeek = new Set<string>()
-  for (const user of users) {
-    if (isAnalyticsExcludedUserId(user.id)) continue
-    const { data, error } = await client.rpc('admin_find_user_by_id', { p_user_id: user.id })
-    if (error) continue
-    const row = (Array.isArray(data) ? data[0] : data) as UserPremiumRow | undefined
+  for (const id of userIds) {
+    if (isAnalyticsExcludedUserId(id)) continue
+    const row = premiumRes.data.get(id)
     if (!isCleanStoreSubscriber(row)) continue
-    premium.add(user.id)
-    if (purchasedThisWeek.has(user.id)) premiumThisWeek.add(user.id)
+    premium.add(id)
+    if (purchasedThisWeek.has(id)) premiumThisWeek.add(id)
   }
 
   const notificationsOn = pushRes.data.length

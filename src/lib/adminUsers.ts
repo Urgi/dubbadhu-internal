@@ -1,4 +1,5 @@
 import type { AnalyticsCountryScope } from './analyticsEventsQuery'
+import type { AdminDevicePlatform } from './adminDevicePlatform'
 import supabase from './supabase'
 import { isAnalyticsExcludedUser } from './analyticsExcludedUsers'
 
@@ -13,6 +14,10 @@ export type AdminRegisteredUserRow = {
   created_at: string
   /** Present on active-today rows: most recent analytics_events.created_at today (Pacific). */
   last_event_at?: string | null
+  /** Best-effort device OS from push_tokens / recent events. */
+  platform?: AdminDevicePlatform | null
+  app_version?: string | null
+  qualify_note?: string | null
 }
 
 function normalizeCountryScope(scope?: AnalyticsCountryScope | null): AnalyticsCountryScope {
@@ -75,5 +80,8 @@ export function userRowToTimelineParams(row: AdminRegisteredUserRow): AdminRegis
     last_activity_date: row.last_activity_date,
     created_at: row.created_at,
     last_event_at: row.last_event_at,
+    platform: row.platform ?? null,
+    app_version: row.app_version ?? null,
+    qualify_note: row.qualify_note ?? null,
   }
 }
