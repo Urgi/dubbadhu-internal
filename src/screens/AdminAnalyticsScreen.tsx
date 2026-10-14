@@ -803,6 +803,21 @@ export default function AdminAnalyticsScreen({ navigation }: Props) {
 
       <Pressable
         style={styles.card}
+        onPress={() => navigation.navigate('AdminMrrBurn')}
+        accessibilityRole="button"
+        accessibilityLabel="Open MRR and burn"
+      >
+        <View style={styles.cardHeader}>
+          <Text style={styles.cardTitle}>MRR & burn</Text>
+          <Text style={styles.cardChevron}>›</Text>
+        </View>
+        <Text style={styles.muted}>
+          RevenueCat MRR vs monthly burn — seats, Supabase envs, tools.
+        </Text>
+      </Pressable>
+
+      <Pressable
+        style={styles.card}
         onPress={() => navigation.navigate('AdminExperiments')}
         accessibilityRole="button"
         accessibilityLabel="Open Experiments"

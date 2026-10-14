@@ -30,6 +30,7 @@ export type AdminLiveSeriesSaveContext =
   | 'series cover'
   | 'series intro video'
   | 'series no-translation video'
+  | 'speaker photo'
 
 /**
  * Blocking confirmation — resolves true only if the admin taps Save anyway.
@@ -61,6 +62,8 @@ export function confirmAdminLiveSeriesSave(
           return 'The Speak tab cover'
         case 'series no-translation video':
           return 'The series no-translation video'
+        case 'speaker photo':
+          return 'The speaker photo'
         default:
           return 'The series intro video'
       }

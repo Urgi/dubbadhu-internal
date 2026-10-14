@@ -1193,6 +1193,7 @@ export function sanitizeScreenContentForPersistence(
           'communityDiscussionEnabled',
           'communityDiscussionPrompt',
           'communityDiscussionAllowedEnglish',
+          'quickReplyEmoji',
           'vocabSectionId',
         ]),
       )
@@ -1214,10 +1215,23 @@ export function sanitizeScreenContentForPersistence(
         const allowed = String(base.communityDiscussionAllowedEnglish ?? '').trim()
         if (allowed) base.communityDiscussionAllowedEnglish = allowed
         else delete base.communityDiscussionAllowedEnglish
+        // Phrase -> emoji for the learner quick-reply chips (empty values dropped).
+        const raw = base.quickReplyEmoji
+        const emoji: Record<string, string> = {}
+        if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+          for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+            const key = String(k).trim()
+            const val = String(v ?? '').trim().slice(0, 16)
+            if (key && val) emoji[key] = val
+          }
+        }
+        if (Object.keys(emoji).length) base.quickReplyEmoji = emoji
+        else delete base.quickReplyEmoji
       } else {
         delete base.communityDiscussionEnabled
         delete base.communityDiscussionPrompt
         delete base.communityDiscussionAllowedEnglish
+        delete base.quickReplyEmoji
       }
       const msg = base.message
       if (msg == null || !String(msg).trim()) delete base.message
@@ -1785,6 +1799,61 @@ export function celebrateExposureWordRows(screens: LessonScreen[]): { afaan: str
   return out
 }
 
+function speakingPhraseAfaan(rec: Record<string, unknown>): string {
+  return String(rec.word ?? rec.oromo ?? rec.prompt ?? rec.phrase ?? rec.text ?? '').trim()
+}
+
+function speakingPhraseEnglish(rec: Record<string, unknown>): string {
+  return String(rec.phraseEnglish ?? rec.translation ?? rec.english ?? '').trim()
+}
+
+/**
+ * Speaking-practice phrases (`phrases[]` or legacy top-level word), lesson order, Afaan-deduped.
+ */
+export function celebrateSpeakingWordRows(screens: LessonScreen[]): { afaan: string; english: string }[] {
+  const out: { afaan: string; english: string }[] = []
+  const seen = new Set<string>()
+  for (const s of screens) {
+    if (s.type !== 'speakingPractice') continue
+    const cr = (s.content ?? {}) as Record<string, unknown>
+    const phrases = Array.isArray(cr.phrases) ? cr.phrases : []
+    const rows = phrases.length > 0 ? phrases : [cr]
+    for (const raw of rows) {
+      if (raw == null) continue
+      const rec =
+        typeof raw === 'string'
+          ? ({ word: raw } as Record<string, unknown>)
+          : typeof raw === 'object' && !Array.isArray(raw)
+            ? (raw as Record<string, unknown>)
+            : null
+      if (!rec) continue
+      const afaan = speakingPhraseAfaan(rec)
+      if (!afaan) continue
+      const key = celebrateAfaanDedupeKey(afaan)
+      if (seen.has(key)) continue
+      seen.add(key)
+      out.push({ afaan, english: speakingPhraseEnglish(rec) })
+    }
+  }
+  return out
+}
+
+/**
+ * Celebrate auto-list: Audio exposure first, then speaking phrases that exposure does not already have.
+ */
+export function celebrateLearnedWordRows(screens: LessonScreen[]): { afaan: string; english: string }[] {
+  const exposure = celebrateExposureWordRows(screens)
+  const seen = new Set(exposure.map((r) => celebrateAfaanDedupeKey(r.afaan)))
+  const out = [...exposure]
+  for (const row of celebrateSpeakingWordRows(screens)) {
+    const key = celebrateAfaanDedupeKey(row.afaan)
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(row)
+  }
+  return out
+}
+
 /** Match editor pair row (`left` = Afaan, `right` = English). */
 export type MatchEditorPair = { left: string; right: string }
 
@@ -1930,7 +1999,7 @@ export function mergeMatchEditorPairLists(lists: MatchEditorPair[][]): MatchEdit
 }
 
 export function celebrateLearnedWordsFromScreens(screens: LessonScreen[]): string[] {
-  return celebrateExposureWordRows(screens).map((r) => r.afaan)
+  return celebrateLearnedWordRows(screens).map((r) => r.afaan)
 }
 
 /** Case-insensitive key for matching Celebrate / Audio exposure tokens. */
@@ -1975,7 +2044,7 @@ export function celebrateLearnedExtraEditorRows(
 
 /**
  * Manual Celebrate entries: `learned_extra` when present, otherwise words in `learned` that are not
- * currently on any Audio exposure (legacy lessons).
+ * currently auto-harvested from Audio exposure / speaking (legacy lessons).
  */
 export function celebrateLearnedExtraFromContent(
   content: Record<string, unknown>,
@@ -2007,8 +2076,8 @@ export function mergeCelebrateLearnedFromExposureAndExtra(
 }
 
 /**
- * Updates every CelebrateScreen: `learned` = Audio exposure words (lesson order) plus `learned_extra`.
- * Removing or changing Audio exposure drops those tokens from `learned` unless the same Afaan is also
+ * Updates every CelebrateScreen: `learned` = Audio exposure + speaking-only phrases, then `learned_extra`.
+ * Removing or changing those screens drops those tokens from `learned` unless the same Afaan is also
  * listed in `learned_extra`. Drops legacy `learned_words`.
  */
 export function syncCelebrateScreensWithAudioExposure(screens: LessonScreen[]): LessonScreen[] {

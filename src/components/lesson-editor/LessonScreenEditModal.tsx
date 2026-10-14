@@ -34,7 +34,9 @@ import {
   celebrateExposureWordRows,
   celebrateLearnedExtraEditorRows,
   celebrateLearnedExtraFromContent,
+  celebrateLearnedWordRows,
   celebrateLearnedWordsFromScreens,
+  celebrateSpeakingWordRows,
   celebrateSanitizedLearnedExtra,
   mergeCelebrateLearnedFromExposureAndExtra,
   finalizeScreenContentPayload,
@@ -4139,12 +4141,17 @@ export function LessonScreenEditModal({
       }
       case 'CelebrateScreen': {
         const exposureRows = celebrateExposureWordRows(lessonScreens)
-        const exposureKeys = new Set(exposureRows.map((r) => celebrateAfaanDedupeKey(r.afaan)))
-        const extraRows = celebrateLearnedExtraEditorRows(c as Record<string, unknown>, exposureKeys)
+        const speakingOnlyRows = celebrateSpeakingWordRows(lessonScreens).filter(
+          (row) => !exposureRows.some((e) => celebrateAfaanDedupeKey(e.afaan) === celebrateAfaanDedupeKey(row.afaan)),
+        )
+        const autoKeys = new Set(
+          celebrateLearnedWordRows(lessonScreens).map((r) => celebrateAfaanDedupeKey(r.afaan)),
+        )
+        const extraRows = celebrateLearnedExtraEditorRows(c as Record<string, unknown>, autoKeys)
         const updateLearnedExtra = (fn: (rows: string[]) => string[]) => {
           setContent((cur) => {
             const keys = new Set(
-              celebrateExposureWordRows(lessonScreens).map((r) => celebrateAfaanDedupeKey(r.afaan)),
+              celebrateLearnedWordRows(lessonScreens).map((r) => celebrateAfaanDedupeKey(r.afaan)),
             )
             const row0 = celebrateLearnedExtraEditorRows(cur as Record<string, unknown>, keys)
             return { ...cur, learned_extra: fn(row0) }
@@ -4203,6 +4210,7 @@ export function LessonScreenEditModal({
                       delete next.communityDiscussionEnabled
                       delete next.communityDiscussionPrompt
                       delete next.communityDiscussionAllowedEnglish
+                      delete next.quickReplyEmoji
                       return next
                     }
                     return { ...cur, communityDiscussionEnabled: true }
@@ -4236,6 +4244,38 @@ export function LessonScreenEditModal({
                   Free-text note for moderation (not shown to learners). Example: “English names and
                   ‘hello’ are OK; otherwise prefer Afaan Oromo.”
                 </Text>
+                <Text style={styles.label}>Quick-reply emoji</Text>
+                <Text style={styles.hint}>
+                  Optional emoji added to each phrase chip on the celebration (e.g. Akkam 👋🏾). Leave empty for none.
+                </Text>
+                {[...exposureRows.map((r) => r.afaan), ...extraRows]
+                  .map((w) => String(w || '').trim())
+                  .filter((w, i, arr) => w && arr.indexOf(w) === i)
+                  .map((phrase) => {
+                    const map =
+                      c.quickReplyEmoji && typeof c.quickReplyEmoji === 'object'
+                        ? (c.quickReplyEmoji as Record<string, string>)
+                        : {}
+                    return (
+                      <Field
+                        key={`qr-emoji-${phrase}`}
+                        label={phrase}
+                        value={String(map[phrase] ?? '')}
+                        onChangeText={(t) =>
+                          setContent((cur) => {
+                            const prev =
+                              cur.quickReplyEmoji && typeof cur.quickReplyEmoji === 'object'
+                                ? { ...(cur.quickReplyEmoji as Record<string, string>) }
+                                : {}
+                            const v = t.trim().slice(0, 16)
+                            if (v) prev[phrase] = v
+                            else delete prev[phrase]
+                            return { ...cur, quickReplyEmoji: prev }
+                          })
+                        }
+                      />
+                    )
+                  })}
               </>
             ) : (
               <Text style={styles.hint}>
@@ -4262,9 +4302,27 @@ export function LessonScreenEditModal({
               )}
             </View>
             <View style={styles.learnedBlock}>
+              <Text style={styles.label}>From speaking (not on Audio exposure)</Text>
+              <Text style={styles.hint}>
+                Speaking-practice phrases that Audio exposure does not already have. Same Afaan is skipped.
+              </Text>
+              {speakingOnlyRows.length ? (
+                <View style={styles.learnedList}>
+                  {speakingOnlyRows.map((row) => (
+                    <View key={`speak-${row.afaan}`} style={styles.learnedReadOnlyRow}>
+                      <Text style={styles.learnedText}>{row.afaan}</Text>
+                      {row.english ? <Text style={styles.learnedReadOnlySub}>{row.english}</Text> : null}
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <Text style={styles.hint}>None. Speaking screens match Audio exposure, or this lesson has no speaking phrases yet.</Text>
+              )}
+            </View>
+            <View style={styles.learnedBlock}>
               <Text style={styles.label}>Additional words</Text>
               <Text style={styles.hint}>
-                Kept when exposure changes. Duplicates of an exposure word are skipped in the final list.
+                Kept when exposure or speaking screens change. Duplicates of an auto word are skipped in the final list.
               </Text>
               {extraRows.map((ex, i) => (
                 <View key={`celebrate-extra-${i}`} style={styles.bulletRow}>

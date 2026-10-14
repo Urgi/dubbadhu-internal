@@ -43,6 +43,8 @@ export type RootStackParamList = {
   Obsidian: undefined
   ObsidianThread: { threadId: string; title?: string }
   AdminAnalytics: undefined
+  /** Ops MRR (RevenueCat) vs monthly burn — seats/envs as qty inputs. */
+  AdminMrrBurn: undefined
   /** Known learner A/B tests (flags on app_config + analytics_events results). */
   AdminExperiments: undefined
   /** Registered / cohort drill-ins from Analytics (active, notifications, activated, premium…). */

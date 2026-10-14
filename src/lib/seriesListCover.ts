@@ -80,6 +80,18 @@ export async function uploadSeriesHeroCoverImage(
   return uploadSeriesCoverJpeg(localUri, path)
 }
 
+/** Square headshot for one speaker, stored beside the series covers. */
+export async function uploadSeriesSpeakerPhoto(
+  localUri: string,
+  seriesId: string,
+  speakerName: string,
+): Promise<{ publicUrl: string } | { error: string }> {
+  const safeId = seriesId.trim().replace(/[^a-zA-Z0-9_-]/g, '_')
+  const folder = safeId.toLowerCase()
+  const slug = speakerName.trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '-') || 'speaker'
+  return uploadSeriesCoverJpeg(localUri, `${folder}/speakers/${slug}.jpg`)
+}
+
 async function uploadSeriesCoverJpeg(
   localUri: string,
   path: string,

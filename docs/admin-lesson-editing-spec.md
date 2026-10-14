@@ -275,7 +275,7 @@ This one is important: the type is **exactly** `"CelebrateScreen"`.
 - `series`: `string` (optional; used in some analytics/UI)
 - `nextLesson`: `string` (optional; used by some legacy lessons)
 - `nextLessonId`: `string` (optional; used by newer lessons)
-- `learned`: `string[]` (optional)
+- `learned`: `string[]` (optional; auto-filled from Audio exposure, then speaking-practice phrases that exposure does not already have)
 - `learned_extra`: `string[]` (optional; admin-only extras merged into `learned`)
 - `xpEarned`: `number` (optional)
 - `communityDiscussionEnabled`: `boolean` (optional; default off — classic celebration)

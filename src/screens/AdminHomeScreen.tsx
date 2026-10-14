@@ -37,8 +37,24 @@ import {
   fetchRecentSignupFunnelRates,
   type RecentSignupFunnelRates,
 } from '../lib/recentSignupActivation'
+import {
+  formatUsd,
+  netAfterStoreCut,
+  sumCosts,
+  sumGrossMrr,
+  sumSubCount,
+} from '../lib/mrrBurn'
+import { loadMrrBurnState } from '../lib/mrrBurnStorage'
 import supabase from '../lib/supabase'
 import type { RootStackParamList } from '../types'
+
+type MrrHomeSummary = {
+  grossMrr: number
+  netMrr: number
+  burn: number
+  contribution: number
+  subCount: number
+}
 
 type Props = StackScreenProps<RootStackParamList, 'AdminHome'>
 
@@ -264,6 +280,7 @@ export default function AdminHomeScreen({ navigation }: Props) {
   const [activeToday, setActiveToday] = useState<number | null>(null)
   const [seriesPipeline, setSeriesPipeline] = useState<ProductionSeriesPipeline | null>(null)
   const [usersThisWeek, setUsersThisWeek] = useState<number | null>(null)
+  const [mrrSummary, setMrrSummary] = useState<MrrHomeSummary | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [initialLoadDone, setInitialLoadDone] = useState(false)
   const [error, setError] = useState('')
@@ -354,6 +371,20 @@ export default function AdminHomeScreen({ navigation }: Props) {
     setError(errs.join('\n'))
   }, [])
 
+  const loadMrrSummary = useCallback(async () => {
+    const state = await loadMrrBurnState()
+    const grossMrr = sumGrossMrr(state.revenue)
+    const netMrr = netAfterStoreCut(grossMrr, state.storeCutRate)
+    const burn = sumCosts(state.costs)
+    setMrrSummary({
+      grossMrr,
+      netMrr,
+      burn,
+      contribution: netMrr - burn,
+      subCount: sumSubCount(state.revenue),
+    })
+  }, [])
+
   useEffect(() => {
     void registerAdminPushToken()
   }, [])
@@ -367,7 +398,7 @@ export default function AdminHomeScreen({ navigation }: Props) {
         } else {
           setRefreshing(true)
         }
-        await loadCounts()
+        await Promise.all([loadCounts(), loadMrrSummary()])
         if (!cancelled) {
           setRefreshing(false)
           setInitialLoadDone(true)
@@ -376,7 +407,7 @@ export default function AdminHomeScreen({ navigation }: Props) {
       return () => {
         cancelled = true
       }
-    }, [loadCounts]),
+    }, [loadCounts, loadMrrSummary]),
   )
 
   const onSignOut = useCallback(() => {
@@ -425,6 +456,39 @@ export default function AdminHomeScreen({ navigation }: Props) {
         </View>
       ) : null}
       {error ? <Text style={styles.errorBanner}>{error}</Text> : null}
+
+      <Pressable
+        style={({ pressed }) => [styles.sectionCard, pressed && styles.sectionCardPressed]}
+        onPress={() => navigation.navigate('AdminMrrBurn')}
+        accessibilityRole="button"
+        accessibilityLabel="Open MRR and burn"
+      >
+        <View style={styles.sectionHeaderRow}>
+          <View style={styles.sectionHeaderText}>
+            <Text style={styles.sectionTitle}>MRR & burn</Text>
+            <Text style={styles.sectionSubtitle}>Net after store cut − monthly burn</Text>
+          </View>
+          <Text style={styles.sectionChevron}>›</Text>
+        </View>
+        {mrrSummary ? (
+          <View style={styles.mrrHomeBlock}>
+            <Text
+              style={[
+                styles.mrrHomeValue,
+                mrrSummary.contribution < 0 ? styles.mrrHomeNeg : styles.mrrHomePos,
+              ]}
+            >
+              {formatUsd(mrrSummary.contribution)}
+            </Text>
+            <Text style={styles.mrrHomeMeta}>
+              {formatUsd(mrrSummary.grossMrr)} gross · {formatUsd(mrrSummary.netMrr)} net ·{' '}
+              {formatUsd(mrrSummary.burn)} burn · {mrrSummary.subCount} paying
+            </Text>
+          </View>
+        ) : (
+          <Text style={[styles.mrrHomeMeta, styles.mrrHomeMetaBelow]}>Loading…</Text>
+        )}
+      </Pressable>
 
       {HOME_SECTION_ORDER.map((section) => (
         <View key={section} style={section === 'analytics' ? styles.analyticsHomeStack : undefined}>
@@ -521,6 +585,30 @@ const styles = StyleSheet.create({
   },
   analyticsHomeStack: {
     gap: 12,
+  },
+  mrrHomeBlock: {
+    marginTop: 14,
+    gap: 6,
+  },
+  mrrHomeValue: {
+    fontSize: 32,
+    fontWeight: '700',
+    lineHeight: 36,
+    color: '#fff',
+  },
+  mrrHomePos: {
+    color: '#5ECF6E',
+  },
+  mrrHomeNeg: {
+    color: '#f87171',
+  },
+  mrrHomeMeta: {
+    color: '#8e8e93',
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  mrrHomeMetaBelow: {
+    marginTop: 12,
   },
   sectionHeaderRow: {
     flexDirection: 'row',

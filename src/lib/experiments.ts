@@ -11,6 +11,8 @@ export const TIMED_COMMENTS_FLAG_COLUMN = 'timed_comments_experiment_enabled' as
 export const MIC_SKIP_FLAG_COLUMN = 'mic_skip_experiment_enabled' as const
 /** Learner `app_config` column. Off until Internal starts the run. */
 export const SPEAKING_TAP_REPS_FLAG_COLUMN = 'speaking_tap_reps_experiment_enabled' as const
+/** Learner migration `app_config_intro_autoplay_experiment`. Off until Internal starts the run. */
+export const INTRO_AUTOPLAY_FLAG_COLUMN = 'intro_autoplay_experiment_enabled' as const
 
 export type ExperimentArm = {
   id: string
@@ -87,10 +89,26 @@ export const SPEAKING_TAP_REPS_V1: KnownExperiment = {
   callAfter: 'After mic skip is called',
 }
 
+/** Lesson intro: tap Start Lesson vs ~3s intro that moves on by itself. */
+export const INTRO_AUTOPLAY_V1: KnownExperiment = {
+  key: 'intro_autoplay_v1',
+  title: 'Lesson intro · autoplay',
+  flagColumn: INTRO_AUTOPLAY_FLAG_COLUMN,
+  arms: [
+    { id: 'control', label: 'Tap Start Lesson' },
+    { id: 'autoplay', label: 'Intro plays, then moves on' },
+  ],
+  metric: 'Reach screen 1 · L1 and L2 finish among exposed users',
+  keep: 'Autoplay raises screen 1 reach and L1 finish holds or rises',
+  kill: 'L1 finish drops, or wrong answers on screen 1 rise',
+  callAfter: '30+ users per arm · exclude ET',
+}
+
 /** Hub list — add rows here as new flags ship. Do not build a creation wizard. */
 export const KNOWN_EXPERIMENTS: KnownExperiment[] = [
   PAYWALL_FREE_N_V1,
   TIMED_COMMENTS_V1,
   MIC_SKIP_V1,
   SPEAKING_TAP_REPS_V1,
+  INTRO_AUTOPLAY_V1,
 ]

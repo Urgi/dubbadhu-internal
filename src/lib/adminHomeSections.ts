@@ -21,6 +21,7 @@ export type HubTileConfig = {
   hint: string
   route:
     | 'AdminAnalytics'
+    | 'AdminMrrBurn'
     | 'AdminExperiments'
     | 'AdminFreeAccess'
     | 'AdminFidelBeta'
@@ -92,6 +93,12 @@ export function buildSectionTiles(
         lines: [`Total Users : ${counts.usersTotal ?? '—'}`],
         hint: 'Dashboards, retention, waitlist. Ask Obsidian for deeper queries.',
         route: 'AdminAnalytics',
+      },
+      {
+        title: 'MRR & burn',
+        lines: ['RevenueCat MRR · seats · Supabase envs · tools'],
+        hint: 'Gross MRR vs monthly burn. Edit seat and environment counts from real invoices.',
+        route: 'AdminMrrBurn',
       },
       {
         title: 'Experiments',

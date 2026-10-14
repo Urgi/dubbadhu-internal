@@ -9,6 +9,7 @@ import ProfessorHomeScreen from './src/screens/ProfessorHomeScreen'
 import AdminHomeScreen from './src/screens/AdminHomeScreen'
 import AdminHubSectionScreen from './src/screens/AdminHubSectionScreen'
 import AdminAnalyticsScreen from './src/screens/AdminAnalyticsScreen'
+import AdminMrrBurnScreen from './src/screens/AdminMrrBurnScreen'
 import AdminExperimentsScreen from './src/screens/AdminExperimentsScreen'
 import ObsidianScreen from './src/screens/ObsidianScreen'
 import ObsidianThreadScreen from './src/screens/ObsidianThreadScreen'
@@ -109,6 +110,11 @@ function AppStack() {
           })}
         />
         <Stack.Screen name="AdminAnalytics" component={AdminAnalyticsScreen} />
+        <Stack.Screen
+          name="AdminMrrBurn"
+          component={AdminMrrBurnScreen}
+          options={{ title: 'MRR & burn' }}
+        />
         <Stack.Screen
           name="AdminExperiments"
           component={AdminExperimentsScreen}

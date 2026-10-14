@@ -54,6 +54,7 @@ import {
 } from '../lib/seedWordsFromLessons'
 import SeriesIntroVideoBlock from '../components/SeriesIntroVideoBlock'
 import SeriesListCoverCropModal from '../components/SeriesListCoverCropModal'
+import SeriesSpeakerPhotosBlock from '../components/SeriesSpeakerPhotosBlock'
 import HomeHeroCoverShapePreview from '../components/HomeHeroCoverShapePreview'
 import {
   SERIES_LIST_COVER_ASPECT,
@@ -1727,6 +1728,17 @@ export default function LessonConfigSeriesScreen({ navigation, route }: Props) {
               </Pressable>
             ) : null}
           </View>
+
+          <SeriesSpeakerPhotosBlock
+            seriesId={seriesId}
+            editable={scriptEditable}
+            lessonSeriesRowExists={lessonSeriesRowExists}
+            confirmSave={async () =>
+              shouldConfirmAdminLiveSeriesSave(role ?? undefined, seriesStatus)
+                ? confirmAdminLiveSeriesSave(seriesStatus, 'speaker photo')
+                : true
+            }
+          />
         </View>
       ) : null}
       {isAdmin ? (
