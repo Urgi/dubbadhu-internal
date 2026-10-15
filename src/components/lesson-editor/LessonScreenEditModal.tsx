@@ -11,6 +11,12 @@ import {
   type ReactNode,
 } from 'react'
 import {
+  EXPOSURE_PHRASE_HARD_MAX,
+  celebrateLearnedWarning,
+  exposureMeaningWarning,
+  exposurePhraseWarning,
+} from '../../lib/learnerTextLimits'
+import {
   ActivityIndicator,
   Alert,
   Image,
@@ -379,6 +385,11 @@ async function resolveAudioExposureWordsAgainstBank(
     const o = String(item.word ?? '').trim()
     const e = String(item.translation ?? item.english ?? '').trim()
     if (!o || !e) throw new Error('Audio exposure words require both Afaan Oromo text and translation.')
+    if (o.length > EXPOSURE_PHRASE_HARD_MAX) {
+      throw new Error(
+        `Word ${i + 1} is ${o.length} characters. The learner screen fits ${EXPOSURE_PHRASE_HARD_MAX}. Split it into two words.`,
+      )
+    }
 
     const row = await lookupWordBankRowWithSeriesLabels(labels, o)
     if (!row) continue
@@ -4074,6 +4085,9 @@ export function LessonScreenEditModal({
                     })
                   }}
                 />
+                {exposurePhraseWarning(String(w.word ?? '')) ? (
+                  <Text style={styles.lengthWarn}>{exposurePhraseWarning(String(w.word ?? ''))}</Text>
+                ) : null}
                 <Field
                   label="Translation"
                   value={String(w.translation ?? w.english ?? '')}
@@ -4091,6 +4105,11 @@ export function LessonScreenEditModal({
                     })
                   }}
                 />
+                {exposureMeaningWarning(String(w.translation ?? w.english ?? '')) ? (
+                  <Text style={styles.lengthWarn}>
+                    {exposureMeaningWarning(String(w.translation ?? w.english ?? ''))}
+                  </Text>
+                ) : null}
                 <Field
                   label="Said by (speaker name)"
                   value={String(w.saidBy ?? '')}
@@ -4282,6 +4301,23 @@ export function LessonScreenEditModal({
                 Off = classic celebration. On = live community chat on this screen; posts use the same AI moderation as Lesson Discussions. Tap i for how to write the prompt.
               </Text>
             )}
+            {celebrateLearnedWarning(
+              new Set(
+                [...exposureRows.map((r) => r.afaan), ...speakingOnlyRows.map((r) => r.afaan), ...extraRows]
+                  .map((w) => celebrateAfaanDedupeKey(String(w || '')))
+                  .filter(Boolean),
+              ).size,
+            ) ? (
+              <Text style={styles.lengthWarn}>
+                {celebrateLearnedWarning(
+                  new Set(
+                    [...exposureRows.map((r) => r.afaan), ...speakingOnlyRows.map((r) => r.afaan), ...extraRows]
+                      .map((w) => celebrateAfaanDedupeKey(String(w || '')))
+                      .filter(Boolean),
+                  ).size,
+                )}
+              </Text>
+            ) : null}
             <View style={styles.learnedBlock}>
               <Text style={styles.label}>From Audio exposure</Text>
               <Text style={styles.hint}>
@@ -5750,6 +5786,7 @@ const styles = StyleSheet.create({
   screenHeaderTitle: { color: '#fff', fontSize: 20, fontWeight: '800', textAlign: 'left' },
   screenHeaderSubtitle: { color: '#a1a1aa', fontSize: 13, marginTop: 6, textAlign: 'left', lineHeight: 18 },
   hint: { color: '#a1a1aa', fontSize: 14, marginBottom: 12 },
+  lengthWarn: { color: '#fbbf24', fontSize: 13, marginTop: -4, marginBottom: 12 },
   imagePickStatusEmpty: { color: '#f87171' },
   form: { marginBottom: 20 },
   dialogueVideoReference: {
