@@ -96,8 +96,8 @@ export function buildSectionTiles(
       },
       {
         title: 'MRR & burn',
-        lines: ['RevenueCat MRR · seats · Supabase envs · tools'],
-        hint: 'Gross MRR vs monthly burn. Edit seat and environment counts from real invoices.',
+        lines: ['List-price MRR · seats · Supabase envs · tools'],
+        hint: 'Subs × $9.99 (annual ÷ 12), then the store cut, vs monthly burn.',
         route: 'AdminMrrBurn',
       },
       {

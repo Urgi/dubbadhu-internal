@@ -5,13 +5,21 @@
 
 export type Money = number
 
+/** List price for a monthly sub. Legacy $7.99 subscribers are counted at this price. */
+export const MONTHLY_LIST_USD = 9.99
+/** List price for an annual sub. Recognized as MRR by dividing by 12. */
+export const ANNUAL_LIST_USD = 59.99
+
 export type RevenueSlice = {
   id: 'monthly' | 'annual'
   label: string
   /** Paying subscriptions in this bucket. */
   count: number
-  /** Gross MRR from RevenueCat for this bucket (before store cut). */
-  mrr: Money
+  /**
+   * Gross list price before the store cut.
+   * Monthly: dollars per month. Annual: dollars per year.
+   */
+  unitPrice: Money
 }
 
 export type CostLine = {
@@ -61,8 +69,8 @@ export function defaultMrrBurnState(): MrrBurnState {
   return {
     storeCutRate: 0.15,
     revenue: [
-      { id: 'monthly', label: 'Monthly subs', count: 5, mrr: 41.95 },
-      { id: 'annual', label: 'Annual → monthly', count: 6, mrr: 31.54 },
+      { id: 'monthly', label: 'Monthly subs', count: 5, unitPrice: MONTHLY_LIST_USD },
+      { id: 'annual', label: 'Annual → monthly', count: 6, unitPrice: ANNUAL_LIST_USD },
     ],
     costs: [
       {
@@ -181,8 +189,18 @@ export function lineTotal(line: CostLine): Money {
   return qty * price
 }
 
+/** Gross MRR for one bucket: subs × list price. Annual price is yearly, so ÷ 12. */
+export function sliceGrossMrr(slice: RevenueSlice): Money {
+  const count = Math.max(0, Number(slice.count) || 0)
+  const priceCents = Math.round(Math.max(0, Number(slice.unitPrice) || 0) * 100)
+  const cents =
+    slice.id === 'annual' ? Math.round((count * priceCents) / 12) : count * priceCents
+  return cents / 100
+}
+
 export function sumGrossMrr(revenue: RevenueSlice[]): Money {
-  return revenue.reduce((s, r) => s + (Number(r.mrr) || 0), 0)
+  const total = revenue.reduce((s, r) => s + sliceGrossMrr(r), 0)
+  return Math.round(total * 100) / 100
 }
 
 export function sumSubCount(revenue: RevenueSlice[]): number {
@@ -195,7 +213,7 @@ export function sumCosts(costs: CostLine[]): Money {
 
 export function netAfterStoreCut(grossMrr: Money, storeCutRate: number): Money {
   const rate = Math.min(1, Math.max(0, Number(storeCutRate) || 0))
-  return grossMrr * (1 - rate)
+  return Math.round(grossMrr * (1 - rate) * 100) / 100
 }
 
 export function formatUsd(n: Money, digits = 2): string {
@@ -219,10 +237,12 @@ export function mergeMrrBurnState(saved: Partial<MrrBurnState> | null | undefine
       ? saved.revenue.find((r) => r && r.id === slice.id)
       : null
     if (!hit) return slice
+    const savedUnit = Number(hit.unitPrice)
     return {
       ...slice,
       count: Number.isFinite(Number(hit.count)) ? Number(hit.count) : slice.count,
-      mrr: Number.isFinite(Number(hit.mrr)) ? Number(hit.mrr) : slice.mrr,
+      // Old saves stored a lump `mrr`. Ignore it — that total did not grow with count.
+      unitPrice: Number.isFinite(savedUnit) ? savedUnit : slice.unitPrice,
     }
   })
 

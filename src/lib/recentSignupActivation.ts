@@ -75,13 +75,17 @@ export function isCleanStoreSubscriber(row: UserPremiumRow | null | undefined): 
 
 export type CohortFirstEvent = { userId: string; firstAt: string }
 
+/** "Active now" means any analytics event within this window. */
+export const ACTIVE_NOW_WINDOW_MS = 10 * 60 * 1000
+export const ACTIVE_NOW_WINDOW_LABEL = '10 min'
+
 /**
- * Distinct learners with any analytics event since `windowMs` ago (default 30 min).
+ * Distinct learners with any analytics event since `windowMs` ago (default 10 min).
  * Uses `admin_count_users_active_since` — live “active now / online” count.
  */
 export async function fetchUsersOnlineNow(
   client: SupabaseClient,
-  windowMs = 30 * 60 * 1000,
+  windowMs = ACTIVE_NOW_WINDOW_MS,
   countryScope: AnalyticsCountryScope = 'all',
 ): Promise<{ data: number | null; error: string | null }> {
   const since = new Date(Date.now() - windowMs).toISOString()

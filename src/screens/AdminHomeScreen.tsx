@@ -45,6 +45,7 @@ import {
   sumSubCount,
 } from '../lib/mrrBurn'
 import { loadMrrBurnState } from '../lib/mrrBurnStorage'
+import { active24hPercent, fetchActive24hStats } from '../lib/adminUsers'
 import supabase from '../lib/supabase'
 import type { RootStackParamList } from '../types'
 
@@ -79,7 +80,8 @@ function SectionCard({
   usersThisWeek,
   funnel,
   premiumFunnel,
-  activeToday,
+  active24h,
+  active24hBase,
   seriesPipeline,
   onPress,
 }: {
@@ -88,7 +90,8 @@ function SectionCard({
   usersThisWeek: number | null
   funnel: RecentSignupFunnelRates | null
   premiumFunnel: RecentSignupFunnelRates | null
-  activeToday: number | null
+  active24h: number | null
+  active24hBase: number | null
   seriesPipeline: ProductionSeriesPipeline | null
   onPress: () => void
 }) {
@@ -111,11 +114,8 @@ function SectionCard({
   const registeredValueTone = toneForRegisteredTotal(counts.usersTotal)
   const activationValueTone = toneForActivationPercent(funnel?.activationPercent ?? null)
   const premiumValueTone = toneForPremiumPercent(premiumFunnel?.premiumConversionPercent ?? null)
-  const activeTodayPct =
-    activeToday != null && counts.usersTotal != null && counts.usersTotal > 0
-      ? Number((((activeToday / counts.usersTotal) * 100).toFixed(0)))
-      : null
-  const activeTodayValueTone = toneForActiveTodayPercent(activeTodayPct)
+  const active24hPct = active24hPercent(active24h, active24hBase)
+  const active24hValueTone = toneForActiveTodayPercent(active24hPct)
 
   const showMetricWhy = (explanation: { title: string; message: string }) => {
     Alert.alert(explanation.title, explanation.message)
@@ -160,13 +160,13 @@ function SectionCard({
             </Text>
           </Pressable>
           <View style={styles.metricCard}>
-            <Text style={styles.metricCardLabel}>Active today</Text>
-            <Text style={[styles.metricCardValue, { color: METRIC_TONE_COLOR[activeTodayValueTone] }]}>
-              {activeTodayPct != null ? `${activeTodayPct}%` : '—'}
+            <Text style={styles.metricCardLabel}>Active 24h</Text>
+            <Text style={[styles.metricCardValue, { color: METRIC_TONE_COLOR[active24hValueTone] }]}>
+              {active24hPct != null ? `${active24hPct}%` : '—'}
             </Text>
             <Text style={styles.metricCardDeltaMuted}>
-              {activeToday != null && counts.usersTotal != null
-                ? `${activeToday}/${counts.usersTotal}`
+              {active24h != null && active24hBase != null
+                ? `${active24h}/${active24hBase}`
                 : '—'}
             </Text>
           </View>
@@ -277,7 +277,8 @@ export default function AdminHomeScreen({ navigation }: Props) {
   })
   const [funnel, setFunnel] = useState<RecentSignupFunnelRates | null>(null)
   const [premiumFunnel, setPremiumFunnel] = useState<RecentSignupFunnelRates | null>(null)
-  const [activeToday, setActiveToday] = useState<number | null>(null)
+  const [active24h, setActive24h] = useState<number | null>(null)
+  const [active24hBase, setActive24hBase] = useState<number | null>(null)
   const [seriesPipeline, setSeriesPipeline] = useState<ProductionSeriesPipeline | null>(null)
   const [usersThisWeek, setUsersThisWeek] = useState<number | null>(null)
   const [mrrSummary, setMrrSummary] = useState<MrrHomeSummary | null>(null)
@@ -302,7 +303,7 @@ export default function AdminHomeScreen({ navigation }: Props) {
       freeAccessRes,
       funnelRes,
       premiumFunnelRes,
-      activeTodayRes,
+      active24hRes,
       seriesPipelineRes,
     ] = await Promise.all([
       supabase.from('words').select('id', { count: 'exact', head: true }).eq('status', 'recorded'),
@@ -320,7 +321,7 @@ export default function AdminHomeScreen({ navigation }: Props) {
       supabase.rpc('admin_complimentary_users_count'),
       fetchRecentSignupFunnelRates(supabase, 50),
       fetchRecentSignupFunnelRates(supabase, 50, 'non_et'),
-      supabase.rpc('admin_count_active_users_today'),
+      fetchActive24hStats('all'),
       fetchProductionSeriesPipeline(supabase),
     ])
 
@@ -358,11 +359,13 @@ export default function AdminHomeScreen({ navigation }: Props) {
     if (freeAccessRes?.error) errs.push(`free access: ${freeAccessRes.error.message}`)
     if (funnelRes.error) errs.push(`funnel: ${funnelRes.error}`)
     if (premiumFunnelRes.error) errs.push(`premium (non-ET): ${premiumFunnelRes.error}`)
-    if (activeTodayRes.error) {
-      errs.push(`active today: ${activeTodayRes.error.message}`)
-      setActiveToday(null)
+    if (active24hRes.error) {
+      errs.push(`active 24h: ${active24hRes.error}`)
+      setActive24h(null)
+      setActive24hBase(null)
     } else {
-      setActiveToday(Number(activeTodayRes.data ?? 0))
+      setActive24h(active24hRes.data?.active ?? 0)
+      setActive24hBase(active24hRes.data?.base ?? 0)
     }
     if (seriesPipelineRes.error) errs.push(`series pipeline: ${seriesPipelineRes.error}`)
     setFunnel(funnelRes.data)
@@ -498,7 +501,8 @@ export default function AdminHomeScreen({ navigation }: Props) {
             usersThisWeek={usersThisWeek}
             funnel={funnel}
             premiumFunnel={premiumFunnel}
-            activeToday={activeToday}
+            active24h={active24h}
+            active24hBase={active24hBase}
             seriesPipeline={seriesPipeline}
             onPress={() => {
               if (section === 'analytics') {

@@ -60,7 +60,7 @@ export type RootStackParamList = {
         countryScope?: 'all' | 'et' | 'non_et'
       }
     | undefined
-  /** Signup → lesson timeline for one user (from Active today / Registered). */
+  /** Signup → lesson timeline for one user (from Active 24h / Registered). */
   AdminUserTimeline: { user: AdminRegisteredUserRow }
   /** Complimentary Premium (isPremium, no premium_product_id). */
   AdminFreeAccess: undefined

@@ -11,6 +11,8 @@ import {
   type AdminDevicePlatform,
 } from './adminDevicePlatform'
 import {
+  ACTIVE_NOW_WINDOW_LABEL,
+  ACTIVE_NOW_WINDOW_MS,
   fetchCohortFirstEventAt,
   fetchCohortPremiumRows,
   fetchCohortPushTokenUserIds,
@@ -85,11 +87,11 @@ async function fetchUsersByIdsOrdered(
   return ids.map((id) => byId.get(id)).filter(Boolean) as AdminRegisteredUserRow[]
 }
 
-/** Distinct users with any analytics event in the last `windowMs` (default 30 min). */
+/** Distinct users with any analytics event in the last `windowMs` (default 10 min). */
 export async function fetchActiveUsersNow(
   limit = 20,
   countryScope: AnalyticsCountryScope = 'all',
-  windowMs = 30 * 60 * 1000,
+  windowMs = ACTIVE_NOW_WINDOW_MS,
 ): Promise<{ data: AdminCohortUserRow[] | null; error: string | null }> {
   const capped = Math.max(1, Math.min(limit, 50))
   const scope = normalizeScope(countryScope)
@@ -119,7 +121,7 @@ export async function fetchActiveUsersNow(
   const withLast = users.map((u) => ({
     ...u,
     last_event_at: lastAt.get(u.id) ?? null,
-    qualify_note: 'Active in last 30 min',
+    qualify_note: `Active in last ${ACTIVE_NOW_WINDOW_LABEL}`,
   }))
   return { data: await attachDeviceInfo(withLast), error: null }
 }
@@ -183,7 +185,7 @@ export async function fetchAnalyticsCohortUsers(
     if (res.error) return { data: null, error: res.error }
     const rows = (res.data ?? []).map((u) => ({
       ...u,
-      qualify_note: 'Active today (Pacific)',
+      qualify_note: 'Active in last 24h',
     }))
     return { data: await attachDeviceInfo(rows), error: null }
   }
@@ -216,7 +218,7 @@ export async function fetchAnalyticsCohortUsers(
 export function adminUsersModeTitle(mode: AdminUsersListMode): string {
   switch (mode) {
     case 'activeToday':
-      return 'Active today'
+      return 'Active 24h'
     case 'activeNow':
       return 'Active now'
     case 'notifications':
@@ -234,9 +236,9 @@ export function adminUsersModeLead(mode: AdminUsersListMode, scopeLabel: string 
   const scopeBit = scopeLabel ? ` Filtered to ${scopeLabel}.` : ''
   switch (mode) {
     case 'activeToday':
-      return `Users with analytics activity today (Pacific). Most recent first, max 10.${scopeBit}`
+      return `Accounts that already existed, with any analytics event in the last 24 hours. Signups in that window are left out. Most recent first, max 10.${scopeBit}`
     case 'activeNow':
-      return `Users with any analytics event in the last 30 minutes. Most recent first.${scopeBit}`
+      return `Users with any analytics event in the last ${ACTIVE_NOW_WINDOW_LABEL}. Most recent first.${scopeBit}`
     case 'notifications':
       return `Newest 50 signups. Each row shows whether push is on.${scopeBit}`
     case 'activated':

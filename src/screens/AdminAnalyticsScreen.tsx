@@ -37,10 +37,12 @@ import {
   type ProductionSeriesPipeline,
 } from '../lib/productionSeriesPipeline'
 import {
+  ACTIVE_NOW_WINDOW_LABEL,
   fetchRecentSignupFunnelRates,
   fetchUsersOnlineNow,
   type RecentSignupFunnelRates,
 } from '../lib/recentSignupActivation'
+import { active24hPercent, fetchActive24hStats } from '../lib/adminUsers'
 import supabase from '../lib/supabase'
 import type { RootStackParamList } from '../types'
 
@@ -153,7 +155,8 @@ export default function AdminAnalyticsScreen({ navigation }: Props) {
   const [refreshing, setRefreshing] = useState(false)
   const [usersTotal, setUsersTotal] = useState<number | null>(null)
   const [usersThisWeek, setUsersThisWeek] = useState<number | null>(null)
-  const [activeToday, setActiveToday] = useState<number | null>(null)
+  const [active24h, setActive24h] = useState<number | null>(null)
+  const [active24hBase, setActive24hBase] = useState<number | null>(null)
   const [onlineNow, setOnlineNow] = useState<number | null>(null)
   const [funnel, setFunnel] = useState<RecentSignupFunnelRates | null>(null)
   const [premiumFunnel, setPremiumFunnel] = useState<RecentSignupFunnelRates | null>(null)
@@ -178,7 +181,7 @@ export default function AdminAnalyticsScreen({ navigation }: Props) {
     const [
       usersRes,
       usersWeekRes,
-      evToday,
+      active24hRes,
       onlineRes,
       funnelRes,
       premiumRes,
@@ -193,8 +196,8 @@ export default function AdminAnalyticsScreen({ navigation }: Props) {
         p_since: weekAgoIso,
         p_country_scope: scope,
       }),
-      supabase.rpc('admin_count_active_users_today', { p_country_scope: scope }),
-      fetchUsersOnlineNow(supabase, 30 * 60 * 1000, scope),
+      fetchActive24hStats(scope),
+      fetchUsersOnlineNow(supabase, undefined, scope),
       fetchRecentSignupFunnelRates(supabase, 50, scope),
       // Premium is always non-ET — paywall does not show in Ethiopia.
       fetchRecentSignupFunnelRates(supabase, 50, 'non_et'),
@@ -221,13 +224,15 @@ export default function AdminAnalyticsScreen({ navigation }: Props) {
       setUsersThisWeek(null)
     } else setUsersThisWeek(Number(usersWeekRes.data ?? 0))
 
-    if (evToday.error) {
-      if (!evToday.error.message.includes('does not exist')) {
-        errs.push(`analytics_events (today): ${evToday.error.message}`)
+    if (active24hRes.error) {
+      if (!active24hRes.error.includes('does not exist')) {
+        errs.push(`active 24h: ${active24hRes.error}`)
       }
-      setActiveToday(null)
+      setActive24h(null)
+      setActive24hBase(null)
     } else {
-      setActiveToday(Number(evToday.data ?? 0))
+      setActive24h(active24hRes.data?.active ?? 0)
+      setActive24hBase(active24hRes.data?.base ?? 0)
     }
 
     if (onlineRes.error) {
@@ -308,10 +313,10 @@ export default function AdminAnalyticsScreen({ navigation }: Props) {
 
   const waitlistMax = useMemo(() => waitlistByLang.reduce((m, x) => Math.max(m, x.count), 0), [waitlistByLang])
 
-  const activePctOfTotal = useMemo(() => {
-    if (usersTotal == null || usersTotal === 0 || activeToday == null) return null
-    return Math.round((activeToday / usersTotal) * 100)
-  }, [usersTotal, activeToday])
+  const activePctOfTotal = useMemo(
+    () => active24hPercent(active24h, active24hBase),
+    [active24h, active24hBase],
+  )
 
   useFocusEffect(
     useCallback(() => {
@@ -470,9 +475,9 @@ export default function AdminAnalyticsScreen({ navigation }: Props) {
           style={styles.metricCard}
           onPress={() => openUsers('activeToday')}
           accessibilityRole="button"
-          accessibilityLabel="View users active today"
+          accessibilityLabel="View users active in the last 24 hours"
         >
-          <Text style={styles.metricLabel}>Active today</Text>
+          <Text style={styles.metricLabel}>Active 24h</Text>
           <Text
             style={[
               styles.metricValue,
@@ -482,7 +487,7 @@ export default function AdminAnalyticsScreen({ navigation }: Props) {
             {activePctOfTotal != null ? `${activePctOfTotal}%` : '—'}
           </Text>
           <Text style={styles.metricDeltaNeutral}>
-            {activeToday != null && usersTotal != null ? `${activeToday}/${usersTotal}` : '—'}
+            {active24h != null && active24hBase != null ? `${active24h}/${active24hBase}` : '—'}
           </Text>
         </Pressable>
       </View>
@@ -497,7 +502,7 @@ export default function AdminAnalyticsScreen({ navigation }: Props) {
           <Text style={styles.metricValue}>
             {showSkeleton ? '···' : onlineNow != null ? onlineNow : '—'}
           </Text>
-          <Text style={styles.metricDeltaNeutral}>Online last 30 min</Text>
+          <Text style={styles.metricDeltaNeutral}>Online last {ACTIVE_NOW_WINDOW_LABEL}</Text>
         </Pressable>
       </View>
 
@@ -812,7 +817,7 @@ export default function AdminAnalyticsScreen({ navigation }: Props) {
           <Text style={styles.cardChevron}>›</Text>
         </View>
         <Text style={styles.muted}>
-          RevenueCat MRR vs monthly burn — seats, Supabase envs, tools.
+          Subs × list price, then the store cut, vs monthly burn.
         </Text>
       </Pressable>
 

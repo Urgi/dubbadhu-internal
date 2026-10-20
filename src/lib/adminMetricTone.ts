@@ -7,7 +7,8 @@
  * Red    = below
  *
  * Our cards are not the same definition as Duo’s 10-Q. We map the closest public number:
- * - Active today = DAU / lifetime registered (Duo does not publish this; implied DAU/lifetime ~5–7%)
+ * - Active 24h = returning users in the last 24h / accounts that existed before that window
+ *   (new signups in the window are left out of both sides; implied DAU/lifetime ~5–7%)
  * - Activation = last-50 first-lesson (industry first-value ~40–60%; Duo does not publish L1 %)
  * - Premium = last-50 non-ET clean store / Duo paid-of-MAU ~9%
  * - Notifications = last-50 with Expo push_tokens (mobile push opt-in often ~35–55%)
@@ -114,7 +115,7 @@ export function toneForPremiumPercent(pct: number | null | undefined): MetricTon
   return 'neutral'
 }
 
-/** DAU / lifetime registered vs implied Duolingo DAU/lifetime (~5–7%). */
+/** Returning 24h actives / pre-window accounts, vs implied Duolingo DAU/lifetime (~5–7%). */
 export const ACTIVE_TODAY_PCT_GOOD = 8
 export const ACTIVE_TODAY_PCT_OK = 5
 

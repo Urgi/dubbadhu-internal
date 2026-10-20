@@ -12,7 +12,7 @@ export type AdminRegisteredUserRow = {
   longest_streak: number
   last_activity_date: string | null
   created_at: string
-  /** Present on active-today rows: most recent analytics_events.created_at today (Pacific). */
+  /** Present on active-24h rows: most recent analytics_events.created_at in the window. */
   last_event_at?: string | null
   /** Best-effort device OS from push_tokens / recent events. */
   platform?: AdminDevicePlatform | null
@@ -42,7 +42,40 @@ export async function fetchRegisteredUsers(
   return { data: rows, error: null }
 }
 
-/** Users with any analytics event today (Pacific), most recent first. Caps at 10. */
+export type Active24hStats = {
+  /** Users who existed before the window and had an event in the last 24 hours. */
+  active: number
+  /** Users who existed before the window. New signups in the window are left out. */
+  base: number
+}
+
+export function active24hPercent(active: number | null, base: number | null): number | null {
+  if (active == null || base == null || base <= 0) return null
+  return Math.round((active / base) * 100)
+}
+
+/** Returning activity over the last 24 hours, plus the pre-window account base. */
+export async function fetchActive24hStats(
+  countryScope: AnalyticsCountryScope = 'all',
+): Promise<{ data: Active24hStats | null; error: string | null }> {
+  const { data, error } = await supabase.rpc('admin_active_24h_stats', {
+    p_country_scope: normalizeCountryScope(countryScope),
+  })
+  if (error) return { data: null, error: error.message }
+  const row = (Array.isArray(data) ? data[0] : data) as
+    | { active_count?: unknown; base_count?: unknown }
+    | null
+    | undefined
+  return {
+    data: {
+      active: Number(row?.active_count ?? 0),
+      base: Number(row?.base_count ?? 0),
+    },
+    error: null,
+  }
+}
+
+/** Users who already had an account and had any analytics event in the last 24 hours. Caps at 10. */
 export async function fetchActiveUsersToday(
   limit = 10,
   countryScope: AnalyticsCountryScope = 'all',

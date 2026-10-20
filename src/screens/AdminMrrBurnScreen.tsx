@@ -19,6 +19,7 @@ import {
   lineTotal,
   netAfterStoreCut,
   newCustomCostLine,
+  sliceGrossMrr,
   sumCosts,
   sumGrossMrr,
   sumSubCount,
@@ -156,8 +157,10 @@ export default function AdminMrrBurnScreen({ navigation }: Props) {
       keyboardDismissMode="on-drag"
     >
       <Text style={styles.lede}>
-        Gross MRR from RevenueCat (before Apple / Google). Costs are per-unit — edit seats and
-        environments from real invoices. Numbers save on this device only.
+        Gross MRR is subscribers × list price. Monthly is $9.99 even if someone subscribed at
+        $7.99. Annual is the yearly price spread over 12 months. The store cut (15% by default)
+        comes off that gross. Costs are per-unit — edit seats and environments from real invoices.
+        Numbers save on this device only.
       </Text>
       {savedHint ? <Text style={styles.savedHint}>{savedHint}</Text> : null}
 
@@ -171,15 +174,18 @@ export default function AdminMrrBurnScreen({ navigation }: Props) {
         </Text>
       </View>
 
-      <Text style={styles.sectionTitle}>Revenue (RevenueCat)</Text>
+      <Text style={styles.sectionTitle}>Revenue</Text>
       <View style={styles.card}>
         {state.revenue.map((slice) => {
-          const avg = slice.count > 0 ? slice.mrr / slice.count : 0
+          const gross = sliceGrossMrr(slice)
+          const perMonth = slice.id === 'annual' ? slice.unitPrice / 12 : slice.unitPrice
           return (
             <View key={slice.id} style={styles.revRow}>
               <View style={styles.revLeft}>
                 <Text style={styles.rowTitle}>{slice.label}</Text>
-                <Text style={styles.rowNote}>≈ {formatUsd(avg)} / sub / mo</Text>
+                <Text style={styles.rowNote}>
+                  {formatUsd(perMonth)} / sub / mo · {formatUsd(gross)} gross
+                </Text>
               </View>
               <QtyField
                 label="Subs"
@@ -188,9 +194,9 @@ export default function AdminMrrBurnScreen({ navigation }: Props) {
                 width={56}
               />
               <QtyField
-                label="MRR $"
-                value={slice.mrr}
-                onChange={(n) => updateRevenue(slice.id, { mrr: Math.max(0, n) })}
+                label={slice.id === 'annual' ? '$ / yr' : '$ / mo'}
+                value={slice.unitPrice}
+                onChange={(n) => updateRevenue(slice.id, { unitPrice: Math.max(0, n) })}
                 width={72}
               />
             </View>
