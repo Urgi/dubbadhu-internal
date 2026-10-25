@@ -78,6 +78,7 @@ export type RootStackParamList = {
   AdminSongs: undefined
   /** Home Proverbs catalog (native + English). */
   AdminProverbs: undefined
+  AdminWarmup: undefined
   /** In-app login promo modal (image + title + body + optional CTA). */
   AdminPromo: undefined
   /** Global Expo push to all registered learner tokens. */

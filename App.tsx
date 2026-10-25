@@ -23,6 +23,7 @@ import AdminCommunityReportsScreen from './src/screens/AdminCommunityReportsScre
 import AdminDiscussionReviewScreen from './src/screens/AdminDiscussionReviewScreen'
 import AdminSongsScreen from './src/screens/AdminSongsScreen'
 import AdminProverbsScreen from './src/screens/AdminProverbsScreen'
+import AdminWarmupScreen from './src/screens/AdminWarmupScreen'
 import AdminPromoScreen from './src/screens/AdminPromoScreen'
 import AdminBroadcastPushScreen from './src/screens/AdminBroadcastPushScreen'
 import AdminForceUpgradeScreen from './src/screens/AdminForceUpgradeScreen'
@@ -171,6 +172,11 @@ function AppStack() {
           name="AdminProverbs"
           component={AdminProverbsScreen}
           options={{ title: 'Proverbs' }}
+        />
+        <Stack.Screen
+          name="AdminWarmup"
+          component={AdminWarmupScreen}
+          options={{ title: 'Warm-up questions' }}
         />
         <Stack.Screen
           name="AdminPromo"

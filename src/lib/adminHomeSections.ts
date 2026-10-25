@@ -33,6 +33,7 @@ export type HubTileConfig = {
     | 'FidelLettersHub'
     | 'AdminSongs'
     | 'AdminProverbs'
+    | 'AdminWarmup'
     | 'AdminPromo'
     | 'AdminBroadcastPush'
     | 'AdminForceUpgrade'
@@ -148,6 +149,12 @@ export function buildSectionTiles(
         lines: ['YouTube catalog for Home → Songs (Oromo + Amharic)'],
         hint: 'Add, edit, reorder, publish — learner app derives thumbnails',
         route: 'AdminSongs',
+      },
+      {
+        title: 'Warm-up questions',
+        lines: ['Words learners can be asked on Home, by lesson'],
+        hint: 'Turn a word off to keep it out of the warm-up · preview each question',
+        route: 'AdminWarmup',
       },
       {
         title: 'Proverbs',
