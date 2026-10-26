@@ -43,7 +43,8 @@ const FETCH_CAP = 20_000
 /** Verified in prod: learner emits `experiment_exposed`. Accept the alias if it appears. */
 export const EXPERIMENT_EXPOSURE_EVENT_NAMES = ['experiment_exposed', 'experiment_exposure'] as const
 
-const FUNNEL_EVENT_NAMES = ['lesson_completed', 'paywall_viewed', 'premium_purchased'] as const
+/** `trial_converted` (revenuecat-webhook) is the paid moment for free-trial buyers; `trial_started` is not money yet. */
+const FUNNEL_EVENT_NAMES = ['lesson_completed', 'paywall_viewed', 'premium_purchased', 'trial_converted'] as const
 
 const FETCH_EVENT_NAMES = [...EXPERIMENT_EXPOSURE_EVENT_NAMES, ...FUNNEL_EVENT_NAMES]
 
@@ -239,7 +240,7 @@ export function aggregateExperimentResults(
         paywalled.add(uid)
         stats.paywallViewed += 1
       }
-    } else if (row.event_name === 'premium_purchased') {
+    } else if (row.event_name === 'premium_purchased' || row.event_name === 'trial_converted') {
       result.sawPremiumEvent = true
       if (!purchased.has(uid)) {
         purchased.add(uid)
