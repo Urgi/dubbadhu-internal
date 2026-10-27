@@ -13,6 +13,8 @@ export const MIC_SKIP_FLAG_COLUMN = 'mic_skip_experiment_enabled' as const
 export const SPEAKING_TAP_REPS_FLAG_COLUMN = 'speaking_tap_reps_experiment_enabled' as const
 /** Learner migration `app_config_intro_autoplay_experiment`. Off until Internal starts the run. */
 export const INTRO_AUTOPLAY_FLAG_COLUMN = 'intro_autoplay_experiment_enabled' as const
+/** Learner migration `app_config_habit_reminders_experiment`. Off until Internal starts the run. */
+export const HABIT_REMINDERS_FLAG_COLUMN = 'habit_reminders_experiment_enabled' as const
 
 export type ExperimentArm = {
   id: string
@@ -104,6 +106,21 @@ export const INTRO_AUTOPLAY_V1: KnownExperiment = {
   callAfter: '30+ users per arm · exclude ET',
 }
 
+/** Reminders: previous prod cadence vs daily week 1 + evening streak saver. */
+export const HABIT_REMINDERS_V1: KnownExperiment = {
+  key: 'habit_reminders_v1',
+  title: 'Reminders · daily week 1 + streak saver',
+  flagColumn: HABIT_REMINDERS_FLAG_COLUMN,
+  arms: [
+    { id: 'prev_release', label: 'Previous release: D1, D2, D4, D7, D14, D28' },
+    { id: 'daily_saver', label: 'Daily D1–D7, D14, D28 + 7pm streak saver' },
+  ],
+  metric: 'D1 and D7 return among new signups (SQL), lessons finished per arm',
+  keep: 'D1 or D7 rises on daily_saver without more notification opt-outs',
+  kill: 'D1/D7 flat or lower, or notifications turned off more on daily_saver',
+  callAfter: '300+ new signups per arm (D1) · build with the flag must be live',
+}
+
 /** Hub list — add rows here as new flags ship. Do not build a creation wizard. */
 export const KNOWN_EXPERIMENTS: KnownExperiment[] = [
   PAYWALL_FREE_N_V1,
@@ -111,4 +128,5 @@ export const KNOWN_EXPERIMENTS: KnownExperiment[] = [
   MIC_SKIP_V1,
   SPEAKING_TAP_REPS_V1,
   INTRO_AUTOPLAY_V1,
+  HABIT_REMINDERS_V1,
 ]
