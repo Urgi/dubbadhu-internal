@@ -28,6 +28,12 @@ import {
   type RevenueSlice,
 } from '../lib/mrrBurn'
 import { loadMrrBurnState, saveMrrBurnState } from '../lib/mrrBurnStorage'
+import {
+  fetchRevenueCatOverview,
+  findMetric,
+  type DurationCount,
+  type RevenueCatOverview,
+} from '../lib/revenueCatMetrics'
 import type { RootStackParamList } from '../types'
 
 type Props = StackScreenProps<RootStackParamList, 'AdminMrrBurn'>
@@ -61,6 +67,89 @@ function QtyField({
         keyboardType="decimal-pad"
         selectTextOnFocus
       />
+    </View>
+  )
+}
+
+function durationLine(rows: DurationCount[]): string {
+  return rows.length ? rows.map((r) => `${r.count} ${r.label.toLowerCase()}`).join(' · ') : 'none'
+}
+
+function RevenueCatCard() {
+  const [overview, setOverview] = useState<RevenueCatOverview | null>(null)
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(true)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    setError('')
+    const res = await fetchRevenueCatOverview()
+    setOverview(res.data)
+    setError(res.error ?? '')
+    setLoading(false)
+  }, [])
+
+  useFocusEffect(
+    useCallback(() => {
+      void load()
+    }, [load]),
+  )
+
+  const mrr = overview ? findMetric(overview, 'mrr') : null
+  const subs = overview ? findMetric(overview, 'active_subscriptions') : null
+  const trials = overview ? findMetric(overview, 'active_trials') : null
+  const revenue = overview ? findMetric(overview, 'revenue') : null
+  const updatedAt = mrr?.updatedAt ? new Date(mrr.updatedAt.replace(' ', 'T')) : null
+
+  return (
+    <View style={styles.rcCard}>
+      <View style={styles.rcHeader}>
+        <Text style={styles.heroLabel}>RevenueCat · live</Text>
+        <Pressable
+          onPress={() => void load()}
+          disabled={loading}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Refresh RevenueCat numbers"
+        >
+          <Text style={styles.rcRefresh}>{loading ? 'Loading…' : 'Refresh'}</Text>
+        </Pressable>
+      </View>
+      {loading && !overview ? (
+        <ActivityIndicator color={ADMIN_ACCENT_GOLD} style={styles.rcSpinner} />
+      ) : error ? (
+        <Text style={styles.rcError}>{error}</Text>
+      ) : overview ? (
+        <>
+          <Text style={styles.rcValue}>{mrr ? formatUsd(mrr.value) : '—'}</Text>
+          <Text style={styles.heroSub}>
+            MRR{overview.currency !== 'USD' ? ` (${overview.currency})` : ''}
+            {revenue ? ` · ${formatUsd(revenue.value, 0)} revenue last 28 days` : ''}
+          </Text>
+          <View style={styles.rcStats}>
+            <View style={styles.rcStat}>
+              <Text style={styles.rcStatValue}>{subs ? Math.round(subs.value) : '—'}</Text>
+              <Text style={styles.fieldLabel}>Paying subs</Text>
+              {overview.byDuration ? (
+                <Text style={styles.rowNote}>{durationLine(overview.byDuration.subscriptions)}</Text>
+              ) : null}
+            </View>
+            <View style={styles.rcStat}>
+              <Text style={styles.rcStatValue}>{trials ? Math.round(trials.value) : '—'}</Text>
+              <Text style={styles.fieldLabel}>Trials</Text>
+              {overview.byDuration ? (
+                <Text style={styles.rowNote}>{durationLine(overview.byDuration.trials)}</Text>
+              ) : null}
+            </View>
+          </View>
+          {overview.breakdownError ? (
+            <Text style={styles.rowNote}>Monthly / annual split unavailable: {overview.breakdownError}</Text>
+          ) : null}
+          {updatedAt && !Number.isNaN(updatedAt.getTime()) ? (
+            <Text style={styles.rowNote}>Updated {updatedAt.toLocaleString()}</Text>
+          ) : null}
+        </>
+      ) : null}
     </View>
   )
 }
@@ -163,6 +252,8 @@ export default function AdminMrrBurnScreen({ navigation }: Props) {
         Numbers save on this device only.
       </Text>
       {savedHint ? <Text style={styles.savedHint}>{savedHint}</Text> : null}
+
+      <RevenueCatCard />
 
       <View style={styles.heroCard}>
         <Text style={styles.heroLabel}>Net after store cut − burn</Text>
@@ -338,6 +429,20 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(232,135,10,0.35)',
     marginBottom: 8,
   },
+  rcCard: {
+    backgroundColor: CARD_BG,
+    borderRadius: 14,
+    padding: 18,
+    gap: 6,
+  },
+  rcHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  rcRefresh: { color: ADMIN_ACCENT_GOLD, fontSize: 13, fontWeight: '600' },
+  rcSpinner: { marginVertical: 12 },
+  rcError: { color: '#f87171', fontSize: 13, lineHeight: 18 },
+  rcValue: { color: '#fafafa', fontSize: 32, fontWeight: '700' },
+  rcStats: { flexDirection: 'row', gap: 12, marginTop: 8 },
+  rcStat: { flex: 1, backgroundColor: '#111113', borderRadius: 10, padding: 12, gap: 2 },
+  rcStatValue: { color: '#fafafa', fontSize: 22, fontWeight: '700' },
   heroLabel: { color: '#a1a1aa', fontSize: 12, letterSpacing: 0.4, textTransform: 'uppercase' },
   heroValue: { color: '#fafafa', fontSize: 36, fontWeight: '700', marginTop: 6 },
   heroSub: { color: '#a1a1aa', fontSize: 13, marginTop: 8 },

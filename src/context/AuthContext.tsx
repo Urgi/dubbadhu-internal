@@ -14,6 +14,7 @@ import {
   saveStoredSession,
 } from '../lib/sessionStorage'
 import { ADMIN_EMAIL } from '../lib/adminAuth'
+import { clearCrewSession } from '../lib/crew'
 
 type AuthContextValue = {
   role: AuthRole | null
@@ -69,6 +70,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     } else {
       setAdminEmail(null)
       void clearStoredSession()
+      void clearCrewSession()
     }
   }, [])
 

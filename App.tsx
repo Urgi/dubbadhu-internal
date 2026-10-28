@@ -13,6 +13,8 @@ import AdminMrrBurnScreen from './src/screens/AdminMrrBurnScreen'
 import AdminExperimentsScreen from './src/screens/AdminExperimentsScreen'
 import ObsidianScreen from './src/screens/ObsidianScreen'
 import ObsidianThreadScreen from './src/screens/ObsidianThreadScreen'
+import ObsidianTeamScreen from './src/screens/ObsidianTeamScreen'
+import CrewChatScreen from './src/screens/CrewChatScreen'
 import AdminFreeAccessScreen from './src/screens/AdminFreeAccessScreen'
 import AdminFidelBetaScreen from './src/screens/AdminFidelBetaScreen'
 import AdminSpeakQaScreen from './src/screens/AdminSpeakQaScreen'
@@ -121,7 +123,9 @@ function AppStack() {
           component={AdminExperimentsScreen}
           options={{ title: 'Experiments' }}
         />
-        <Stack.Screen name="Obsidian" component={ObsidianScreen} options={{ title: 'Obsidian' }} />
+        <Stack.Screen name="ObsidianTeam" component={ObsidianTeamScreen} options={{ title: 'Obsidian Team' }} />
+        <Stack.Screen name="CrewChat" component={CrewChatScreen} />
+        <Stack.Screen name="Obsidian" component={ObsidianScreen} options={{ title: 'Old threads' }} />
         <Stack.Screen name="ObsidianThread" component={ObsidianThreadScreen} />
         <Stack.Screen
           name="AdminUsers"

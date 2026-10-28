@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { getExpoPublicSupabaseAnonKey, getExpoPublicSupabaseUrl } from './expoPublicEnv'
+import { saveCrewSession } from './crew'
 
 export const ADMIN_EMAIL = 'dev@afaantech.com'
 
@@ -48,7 +49,7 @@ export async function verifyAdminOtp(
   try {
     const normalized = email.trim().toLowerCase()
     const cleanToken = token.trim()
-    const { error } = await authClient.auth.verifyOtp({
+    const { data, error } = await authClient.auth.verifyOtp({
       email: normalized,
       token: cleanToken,
       type: 'email',
@@ -56,6 +57,8 @@ export async function verifyAdminOtp(
     if (error) {
       return { ok: false, error: error.message || 'Invalid or expired verification code.' }
     }
+    // Obsidian Team approvals need this real admin session (see src/lib/crew.ts).
+    await saveCrewSession(data.session)
     return { ok: true }
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Network error verifying code.'

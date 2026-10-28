@@ -15,3 +15,12 @@ verify_jwt = false
 # Cron posts OBSIDIAN_PURGE_SECRET (not a user JWT). See sql/obsidian_retention.sql.
 [functions.obsidian-purge-stale]
 verify_jwt = false
+
+# Obsidian Team approvals: needs a signed-in admin user JWT (service_role is refused in code).
+[functions.crew-decide]
+verify_jwt = true
+
+# Admin → MRR & burn live numbers: needs a signed-in admin user JWT (service_role is refused in code).
+# Secrets: REVENUECAT_SECRET_KEY (v2, charts_metrics:overview:read + charts_metrics:charts:read), REVENUECAT_PROJECT_ID.
+[functions.revenuecat-metrics]
+verify_jwt = true

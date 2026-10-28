@@ -40,6 +40,8 @@ export type RootStackParamList = {
   /** Hub section drill-in (tiles for analytics / assets / moderation). */
   AdminHubSection: { section: 'analytics' | 'assets' | 'moderation' }
   /** Multi-turn thinking desk (replaces the LubbuDubbadhu Gemini-chat stub). */
+  ObsidianTeam: undefined
+  CrewChat: { botId: string; name: string }
   Obsidian: undefined
   ObsidianThread: { threadId: string; title?: string }
   AdminAnalytics: undefined

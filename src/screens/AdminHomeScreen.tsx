@@ -431,11 +431,11 @@ export default function AdminHomeScreen({ navigation }: Props) {
       ),
       headerRight: () => (
         <Pressable
-          onPress={() => navigation.navigate('Obsidian')}
+          onPress={() => navigation.navigate('ObsidianTeam')}
           style={styles.headerIconBtn}
           hitSlop={8}
           accessibilityRole="button"
-          accessibilityLabel="Open Obsidian"
+          accessibilityLabel="Open Obsidian Team"
         >
           <ObsidianHeaderIcon />
         </Pressable>

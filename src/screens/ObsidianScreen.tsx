@@ -66,7 +66,7 @@ export default function ObsidianScreen({ navigation }: Props) {
 
   useLayoutEffect(() => {
     navigation.setOptions({
-      title: 'Obsidian',
+      title: 'Old threads',
       headerStyle: { backgroundColor: '#000000' },
       headerTitleStyle: { fontSize: 15, fontWeight: '700', color: '#ffffff' },
       headerTintColor: '#ffffff',
