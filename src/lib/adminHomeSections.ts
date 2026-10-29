@@ -38,6 +38,7 @@ export type HubTileConfig = {
     | 'AdminBroadcastPush'
     | 'AdminForceUpgrade'
     | 'AdminHomeHeroPreview'
+    | 'AdminSpeakCountdown'
     | 'AdminDiscussionReview'
     | 'AdminCommunityReports'
     | 'AdminPracticeSuggestions'
@@ -173,6 +174,12 @@ export function buildSectionTiles(
         lines: ['Cover height + vertical crop offset on learner Home'],
         hint: 'Tune series intro preview without a new learner build',
         route: 'AdminHomeHeroPreview',
+      },
+      {
+        title: 'Speak countdown',
+        lines: ['Next series countdown on the learner Speak tab'],
+        hint: 'Set the release date without a new learner build',
+        route: 'AdminSpeakCountdown',
       },
       {
         title: 'Push broadcast',

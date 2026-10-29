@@ -89,6 +89,8 @@ export type RootStackParamList = {
   AdminForceUpgrade: undefined
   /** Learner Home series cover preview height + crop offset. */
   AdminHomeHeroPreview: undefined
+  /** Learner Speak tab "next series" countdown date (app_config.speak_next_series_at). */
+  AdminSpeakCountdown: undefined
   LessonConfig: undefined
   LessonConfigSeries: { seriesId: string }
   LessonConfigDetail: {
