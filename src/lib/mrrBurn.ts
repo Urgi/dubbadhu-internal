@@ -1,25 +1,17 @@
 /**
  * Ops MRR + burn model for Admin → Analytics → MRR & burn.
- * Quantities are editable in the UI; unit prices default from Oct 2026 receipts/notes.
+ * Revenue comes from RevenueCat; cost quantities are editable in the UI.
  */
+
+import { findMetric, type RevenueCatOverview } from './revenueCatMetrics'
 
 export type Money = number
 
-/** List price for a monthly sub. Legacy $7.99 subscribers are counted at this price. */
-export const MONTHLY_LIST_USD = 9.99
-/** List price for an annual sub. Recognized as MRR by dividing by 12. */
-export const ANNUAL_LIST_USD = 59.99
-
-export type RevenueSlice = {
-  id: 'monthly' | 'annual'
-  label: string
-  /** Paying subscriptions in this bucket. */
-  count: number
-  /**
-   * Gross list price before the store cut.
-   * Monthly: dollars per month. Annual: dollars per year.
-   */
-  unitPrice: Money
+/** Last successful RevenueCat fetch, kept so the screen has numbers before the next one. */
+export type RevenueCatSnapshot = {
+  overview: RevenueCatOverview
+  /** ISO time of the fetch. */
+  fetchedAt: string
 }
 
 export type CostLine = {
@@ -56,7 +48,7 @@ export function newCustomCostLine(): CostLine {
 }
 
 export type MrrBurnState = {
-  revenue: RevenueSlice[]
+  lastRevenueCat: RevenueCatSnapshot | null
   /** Assumed App Store / Play cut on subscription revenue (0–1). */
   storeCutRate: number
   costs: CostLine[]
@@ -68,10 +60,7 @@ export const MRR_BURN_STORAGE_KEY = 'admin_mrr_burn_v1'
 export function defaultMrrBurnState(): MrrBurnState {
   return {
     storeCutRate: 0.15,
-    revenue: [
-      { id: 'monthly', label: 'Monthly subs', count: 5, unitPrice: MONTHLY_LIST_USD },
-      { id: 'annual', label: 'Annual → monthly', count: 6, unitPrice: ANNUAL_LIST_USD },
-    ],
+    lastRevenueCat: null,
     costs: [
       {
         id: 'content',
@@ -189,22 +178,15 @@ export function lineTotal(line: CostLine): Money {
   return qty * price
 }
 
-/** Gross MRR for one bucket: subs × list price. Annual price is yearly, so ÷ 12. */
-export function sliceGrossMrr(slice: RevenueSlice): Money {
-  const count = Math.max(0, Number(slice.count) || 0)
-  const priceCents = Math.round(Math.max(0, Number(slice.unitPrice) || 0) * 100)
-  const cents =
-    slice.id === 'annual' ? Math.round((count * priceCents) / 12) : count * priceCents
-  return cents / 100
+/** Gross MRR from the RevenueCat snapshot (null when it has no MRR metric). */
+export function snapshotGrossMrr(snapshot: RevenueCatSnapshot): Money | null {
+  const mrr = findMetric(snapshot.overview, 'mrr')
+  return mrr ? Math.round(mrr.value * 100) / 100 : null
 }
 
-export function sumGrossMrr(revenue: RevenueSlice[]): Money {
-  const total = revenue.reduce((s, r) => s + sliceGrossMrr(r), 0)
-  return Math.round(total * 100) / 100
-}
-
-export function sumSubCount(revenue: RevenueSlice[]): number {
-  return revenue.reduce((s, r) => s + Math.max(0, Math.floor(Number(r.count) || 0)), 0)
+export function snapshotPayingCount(snapshot: RevenueCatSnapshot): number | null {
+  const subs = findMetric(snapshot.overview, 'active_subscriptions')
+  return subs ? Math.round(subs.value) : null
 }
 
 export function sumCosts(costs: CostLine[]): Money {
@@ -222,6 +204,14 @@ export function formatUsd(n: Money, digits = 2): string {
   return `${sign}$${Math.abs(v).toFixed(digits)}`
 }
 
+function parseSnapshot(raw: unknown): RevenueCatSnapshot | null {
+  if (!raw || typeof raw !== 'object') return null
+  const snap = raw as Partial<RevenueCatSnapshot>
+  if (typeof snap.fetchedAt !== 'string') return null
+  if (!snap.overview || !Array.isArray(snap.overview.metrics)) return null
+  return { overview: snap.overview, fetchedAt: snap.fetchedAt }
+}
+
 /** Merge saved qty / prices onto defaults so new cost lines still appear after updates. */
 export function mergeMrrBurnState(saved: Partial<MrrBurnState> | null | undefined): MrrBurnState {
   const base = defaultMrrBurnState()
@@ -232,19 +222,8 @@ export function mergeMrrBurnState(saved: Partial<MrrBurnState> | null | undefine
       ? saved.storeCutRate
       : base.storeCutRate
 
-  const revenue = base.revenue.map((slice) => {
-    const hit = Array.isArray(saved.revenue)
-      ? saved.revenue.find((r) => r && r.id === slice.id)
-      : null
-    if (!hit) return slice
-    const savedUnit = Number(hit.unitPrice)
-    return {
-      ...slice,
-      count: Number.isFinite(Number(hit.count)) ? Number(hit.count) : slice.count,
-      // Old saves stored a lump `mrr`. Ignore it — that total did not grow with count.
-      unitPrice: Number.isFinite(savedUnit) ? savedUnit : slice.unitPrice,
-    }
-  })
+  // Old saves also have hand-typed `revenue` slices. Ignored — RevenueCat is the source now.
+  const lastRevenueCat = parseSnapshot(saved.lastRevenueCat)
 
   const savedCosts = Array.isArray(saved.costs) ? saved.costs : []
   const costs = base.costs.map((line) => {
@@ -275,5 +254,5 @@ export function mergeMrrBurnState(saved: Partial<MrrBurnState> | null | undefine
     })
   }
 
-  return { storeCutRate, revenue, costs }
+  return { storeCutRate, lastRevenueCat, costs }
 }

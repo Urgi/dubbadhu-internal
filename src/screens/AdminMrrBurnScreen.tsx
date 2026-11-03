@@ -19,20 +19,18 @@ import {
   lineTotal,
   netAfterStoreCut,
   newCustomCostLine,
-  sliceGrossMrr,
+  snapshotGrossMrr,
+  snapshotPayingCount,
   sumCosts,
-  sumGrossMrr,
-  sumSubCount,
   type CostLine,
   type MrrBurnState,
-  type RevenueSlice,
+  type RevenueCatSnapshot,
 } from '../lib/mrrBurn'
 import { loadMrrBurnState, saveMrrBurnState } from '../lib/mrrBurnStorage'
 import {
   fetchRevenueCatOverview,
   findMetric,
   type DurationCount,
-  type RevenueCatOverview,
 } from '../lib/revenueCatMetrics'
 import type { RootStackParamList } from '../types'
 
@@ -75,38 +73,30 @@ function durationLine(rows: DurationCount[]): string {
   return rows.length ? rows.map((r) => `${r.count} ${r.label.toLowerCase()}`).join(' · ') : 'none'
 }
 
-function RevenueCatCard() {
-  const [overview, setOverview] = useState<RevenueCatOverview | null>(null)
-  const [error, setError] = useState('')
-  const [loading, setLoading] = useState(true)
-
-  const load = useCallback(async () => {
-    setLoading(true)
-    setError('')
-    const res = await fetchRevenueCatOverview()
-    setOverview(res.data)
-    setError(res.error ?? '')
-    setLoading(false)
-  }, [])
-
-  useFocusEffect(
-    useCallback(() => {
-      void load()
-    }, [load]),
-  )
-
+function RevenueCatCard({
+  snapshot,
+  loading,
+  error,
+  onRefresh,
+}: {
+  snapshot: RevenueCatSnapshot | null
+  loading: boolean
+  error: string
+  onRefresh: () => void
+}) {
+  const overview = snapshot?.overview ?? null
   const mrr = overview ? findMetric(overview, 'mrr') : null
   const subs = overview ? findMetric(overview, 'active_subscriptions') : null
   const trials = overview ? findMetric(overview, 'active_trials') : null
   const revenue = overview ? findMetric(overview, 'revenue') : null
-  const updatedAt = mrr?.updatedAt ? new Date(mrr.updatedAt.replace(' ', 'T')) : null
+  const fetchedAt = snapshot ? new Date(snapshot.fetchedAt) : null
 
   return (
     <View style={styles.rcCard}>
       <View style={styles.rcHeader}>
         <Text style={styles.heroLabel}>RevenueCat · live</Text>
         <Pressable
-          onPress={() => void load()}
+          onPress={onRefresh}
           disabled={loading}
           hitSlop={8}
           accessibilityRole="button"
@@ -117,8 +107,6 @@ function RevenueCatCard() {
       </View>
       {loading && !overview ? (
         <ActivityIndicator color={ADMIN_ACCENT_GOLD} style={styles.rcSpinner} />
-      ) : error ? (
-        <Text style={styles.rcError}>{error}</Text>
       ) : overview ? (
         <>
           <Text style={styles.rcValue}>{mrr ? formatUsd(mrr.value) : '—'}</Text>
@@ -145,11 +133,14 @@ function RevenueCatCard() {
           {overview.breakdownError ? (
             <Text style={styles.rowNote}>Monthly / annual split unavailable: {overview.breakdownError}</Text>
           ) : null}
-          {updatedAt && !Number.isNaN(updatedAt.getTime()) ? (
-            <Text style={styles.rowNote}>Updated {updatedAt.toLocaleString()}</Text>
+          {fetchedAt && !Number.isNaN(fetchedAt.getTime()) ? (
+            <Text style={styles.rowNote}>Last updated {fetchedAt.toLocaleString()}</Text>
           ) : null}
         </>
+      ) : !error ? (
+        <Text style={styles.rowNote}>No RevenueCat numbers yet. Tap Refresh.</Text>
       ) : null}
+      {error && !loading ? <Text style={styles.rcError}>{error}</Text> : null}
     </View>
   )
 }
@@ -158,16 +149,38 @@ export default function AdminMrrBurnScreen({ navigation }: Props) {
   const [state, setState] = useState<MrrBurnState>(() => defaultMrrBurnState())
   const [loading, setLoading] = useState(true)
   const [savedHint, setSavedHint] = useState('')
+  const [rcLoading, setRcLoading] = useState(false)
+  const [rcError, setRcError] = useState('')
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const stateRef = useRef(state)
 
   const persist = useCallback((next: MrrBurnState) => {
+    stateRef.current = next
     setState(next)
     if (saveTimer.current) clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(() => {
-      void saveMrrBurnState(next).then(() => {
+      void saveMrrBurnState(stateRef.current).then(() => {
         setSavedHint('Saved on this device')
       })
     }, 350)
+  }, [])
+
+  // Keep the last good RevenueCat result on the device; a failed refresh leaves it in place.
+  const refreshRevenueCat = useCallback(async () => {
+    setRcLoading(true)
+    setRcError('')
+    const res = await fetchRevenueCatOverview()
+    if (res.data) {
+      const next = {
+        ...stateRef.current,
+        lastRevenueCat: { overview: res.data, fetchedAt: new Date().toISOString() },
+      }
+      stateRef.current = next
+      setState(next)
+      void saveMrrBurnState(next)
+    }
+    setRcError(res.error ?? '')
+    setRcLoading(false)
   }, [])
 
   useFocusEffect(
@@ -177,15 +190,17 @@ export default function AdminMrrBurnScreen({ navigation }: Props) {
         setLoading(true)
         const loaded = await loadMrrBurnState()
         if (!cancelled) {
+          stateRef.current = loaded
           setState(loaded)
           setLoading(false)
+          void refreshRevenueCat()
         }
       })()
       return () => {
         cancelled = true
         if (saveTimer.current) clearTimeout(saveTimer.current)
       }
-    }, []),
+    }, [refreshRevenueCat]),
   )
 
   useLayoutEffect(() => {
@@ -197,21 +212,17 @@ export default function AdminMrrBurnScreen({ navigation }: Props) {
     })
   }, [navigation])
 
-  const grossMrr = useMemo(() => sumGrossMrr(state.revenue), [state.revenue])
-  const subCount = useMemo(() => sumSubCount(state.revenue), [state.revenue])
+  const grossMrr = useMemo(
+    () => (state.lastRevenueCat ? snapshotGrossMrr(state.lastRevenueCat) : null),
+    [state.lastRevenueCat],
+  )
+  const subCount = state.lastRevenueCat ? snapshotPayingCount(state.lastRevenueCat) : null
   const netMrr = useMemo(
-    () => netAfterStoreCut(grossMrr, state.storeCutRate),
+    () => (grossMrr == null ? null : netAfterStoreCut(grossMrr, state.storeCutRate)),
     [grossMrr, state.storeCutRate],
   )
   const burn = useMemo(() => sumCosts(state.costs), [state.costs])
-  const runway = netMrr - burn
-
-  const updateRevenue = (id: RevenueSlice['id'], patch: Partial<RevenueSlice>) => {
-    persist({
-      ...state,
-      revenue: state.revenue.map((r) => (r.id === id ? { ...r, ...patch } : r)),
-    })
-  }
+  const runway = netMrr == null ? null : netMrr - burn
 
   const updateCost = (id: string, patch: Partial<CostLine>) => {
     persist({
@@ -246,57 +257,38 @@ export default function AdminMrrBurnScreen({ navigation }: Props) {
       keyboardDismissMode="on-drag"
     >
       <Text style={styles.lede}>
-        Gross MRR is subscribers × list price. Monthly is $9.99 even if someone subscribed at
-        $7.99. Annual is the yearly price spread over 12 months. The store cut (15% by default)
-        comes off that gross. Costs are per-unit — edit seats and environments from real invoices.
-        Numbers save on this device only.
+        Revenue is the MRR from the last RevenueCat refresh. The store cut (15% by default) comes
+        off that. Costs are per unit, so edit seats and environments from real invoices. Numbers
+        save on this device only.
       </Text>
       {savedHint ? <Text style={styles.savedHint}>{savedHint}</Text> : null}
 
-      <RevenueCatCard />
+      <RevenueCatCard
+        snapshot={state.lastRevenueCat}
+        loading={rcLoading}
+        error={rcError}
+        onRefresh={() => void refreshRevenueCat()}
+      />
 
       <View style={styles.heroCard}>
         <Text style={styles.heroLabel}>Net after store cut − burn</Text>
-        <Text style={[styles.heroValue, runway < 0 ? styles.neg : styles.pos]}>
-          {formatUsd(runway)}
-        </Text>
-        <Text style={styles.heroSub}>
-          {formatUsd(netMrr)} net MRR · {formatUsd(burn)} burn · {subCount} paying
-        </Text>
+        {runway == null || netMrr == null ? (
+          <Text style={styles.heroSub}>Needs RevenueCat MRR. Tap Refresh above.</Text>
+        ) : (
+          <>
+            <Text style={[styles.heroValue, runway < 0 ? styles.neg : styles.pos]}>
+              {formatUsd(runway)}
+            </Text>
+            <Text style={styles.heroSub}>
+              {formatUsd(netMrr)} net MRR · {formatUsd(burn)} burn
+              {subCount != null ? ` · ${subCount} paying` : ''}
+            </Text>
+          </>
+        )}
       </View>
 
-      <Text style={styles.sectionTitle}>Revenue</Text>
+      <Text style={styles.sectionTitle}>Store cut</Text>
       <View style={styles.card}>
-        {state.revenue.map((slice) => {
-          const gross = sliceGrossMrr(slice)
-          const perMonth = slice.id === 'annual' ? slice.unitPrice / 12 : slice.unitPrice
-          return (
-            <View key={slice.id} style={styles.revRow}>
-              <View style={styles.revLeft}>
-                <Text style={styles.rowTitle}>{slice.label}</Text>
-                <Text style={styles.rowNote}>
-                  {formatUsd(perMonth)} / sub / mo · {formatUsd(gross)} gross
-                </Text>
-              </View>
-              <QtyField
-                label="Subs"
-                value={slice.count}
-                onChange={(n) => updateRevenue(slice.id, { count: Math.max(0, Math.round(n)) })}
-                width={56}
-              />
-              <QtyField
-                label={slice.id === 'annual' ? '$ / yr' : '$ / mo'}
-                value={slice.unitPrice}
-                onChange={(n) => updateRevenue(slice.id, { unitPrice: Math.max(0, n) })}
-                width={72}
-              />
-            </View>
-          )
-        })}
-        <View style={styles.totalRow}>
-          <Text style={styles.totalLabel}>Gross MRR</Text>
-          <Text style={styles.totalValue}>{formatUsd(grossMrr)}</Text>
-        </View>
         <View style={styles.cutRow}>
           <Text style={styles.cutLabel}>
             Store cut ({Math.round(state.storeCutRate * 100)}%)
@@ -312,7 +304,7 @@ export default function AdminMrrBurnScreen({ navigation }: Props) {
             }
             width={56}
           />
-          <Text style={styles.totalValue}>{formatUsd(netMrr)} net</Text>
+          <Text style={styles.totalValue}>{netMrr == null ? '—' : formatUsd(netMrr)} net</Text>
         </View>
       </View>
 
@@ -395,8 +387,8 @@ export default function AdminMrrBurnScreen({ navigation }: Props) {
         </View>
         <View style={styles.totalRow}>
           <Text style={styles.totalLabel}>Contribution</Text>
-          <Text style={[styles.totalValue, runway < 0 ? styles.neg : styles.pos]}>
-            {formatUsd(runway)}
+          <Text style={[styles.totalValue, runway != null && runway < 0 ? styles.neg : styles.pos]}>
+            {runway == null ? '—' : formatUsd(runway)}
           </Text>
         </View>
       </View>
@@ -404,7 +396,7 @@ export default function AdminMrrBurnScreen({ navigation }: Props) {
       <Pressable
         style={styles.resetBtn}
         onPress={() => {
-          const next = defaultMrrBurnState()
+          const next = { ...defaultMrrBurnState(), lastRevenueCat: state.lastRevenueCat }
           persist(next)
           setSavedHint('Reset to Oct 2026 defaults')
         }}
@@ -463,8 +455,6 @@ const styles = StyleSheet.create({
   },
   costCard: { marginBottom: 2 },
   costCardOff: { opacity: 0.45 },
-  revRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 10 },
-  revLeft: { flex: 1, paddingBottom: 4 },
   rowTitle: { color: '#f4f4f5', fontSize: 15, fontWeight: '600' },
   rowNote: { color: '#71717a', fontSize: 12, marginTop: 3, lineHeight: 16 },
   field: { gap: 4 },

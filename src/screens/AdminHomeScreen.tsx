@@ -40,9 +40,9 @@ import {
 import {
   formatUsd,
   netAfterStoreCut,
+  snapshotGrossMrr,
+  snapshotPayingCount,
   sumCosts,
-  sumGrossMrr,
-  sumSubCount,
 } from '../lib/mrrBurn'
 import { loadMrrBurnState } from '../lib/mrrBurnStorage'
 import { active24hPercent, fetchActive24hStats } from '../lib/adminUsers'
@@ -50,11 +50,12 @@ import supabase from '../lib/supabase'
 import type { RootStackParamList } from '../types'
 
 type MrrHomeSummary = {
-  grossMrr: number
+  /** Null until the MRR & burn screen has loaded RevenueCat once. */
+  grossMrr: number | null
   netMrr: number
   burn: number
   contribution: number
-  subCount: number
+  subCount: number | null
 }
 
 type Props = StackScreenProps<RootStackParamList, 'AdminHome'>
@@ -376,15 +377,16 @@ export default function AdminHomeScreen({ navigation }: Props) {
 
   const loadMrrSummary = useCallback(async () => {
     const state = await loadMrrBurnState()
-    const grossMrr = sumGrossMrr(state.revenue)
-    const netMrr = netAfterStoreCut(grossMrr, state.storeCutRate)
+    const snap = state.lastRevenueCat
+    const grossMrr = snap ? snapshotGrossMrr(snap) : null
+    const netMrr = grossMrr == null ? 0 : netAfterStoreCut(grossMrr, state.storeCutRate)
     const burn = sumCosts(state.costs)
     setMrrSummary({
       grossMrr,
       netMrr,
       burn,
       contribution: netMrr - burn,
-      subCount: sumSubCount(state.revenue),
+      subCount: snap ? snapshotPayingCount(snap) : null,
     })
   }, [])
 
@@ -473,7 +475,11 @@ export default function AdminHomeScreen({ navigation }: Props) {
           </View>
           <Text style={styles.sectionChevron}>›</Text>
         </View>
-        {mrrSummary ? (
+        {mrrSummary && mrrSummary.grossMrr == null ? (
+          <Text style={[styles.mrrHomeMeta, styles.mrrHomeMetaBelow]}>
+            Open to load RevenueCat · {formatUsd(mrrSummary.burn)} burn
+          </Text>
+        ) : mrrSummary ? (
           <View style={styles.mrrHomeBlock}>
             <Text
               style={[
@@ -484,8 +490,9 @@ export default function AdminHomeScreen({ navigation }: Props) {
               {formatUsd(mrrSummary.contribution)}
             </Text>
             <Text style={styles.mrrHomeMeta}>
-              {formatUsd(mrrSummary.grossMrr)} gross · {formatUsd(mrrSummary.netMrr)} net ·{' '}
-              {formatUsd(mrrSummary.burn)} burn · {mrrSummary.subCount} paying
+              {formatUsd(mrrSummary.grossMrr ?? 0)} gross · {formatUsd(mrrSummary.netMrr)} net ·{' '}
+              {formatUsd(mrrSummary.burn)} burn
+              {mrrSummary.subCount != null ? ` · ${mrrSummary.subCount} paying` : ''}
             </Text>
           </View>
         ) : (
