@@ -15,6 +15,10 @@ export const SPEAKING_TAP_REPS_FLAG_COLUMN = 'speaking_tap_reps_experiment_enabl
 export const INTRO_AUTOPLAY_FLAG_COLUMN = 'intro_autoplay_experiment_enabled' as const
 /** Learner migration `app_config_habit_reminders_experiment`. Off until Internal starts the run. */
 export const HABIT_REMINDERS_FLAG_COLUMN = 'habit_reminders_experiment_enabled' as const
+/** Learner migration `app_config_home_discussion_experiment`. Off until Internal starts the run. */
+export const HOME_DISCUSSION_FLAG_COLUMN = 'home_discussion_experiment_enabled' as const
+/** Learner migration `app_config_free_daily_lesson_experiment`. Off until Internal starts the run. */
+export const FREE_DAILY_LESSON_FLAG_COLUMN = 'free_daily_lesson_experiment_enabled' as const
 
 export type ExperimentArm = {
   id: string
@@ -121,6 +125,38 @@ export const HABIT_REMINDERS_V1: KnownExperiment = {
   callAfter: '300+ new signups per arm (D1) · build with the flag must be live',
 }
 
+/** Home: current layout vs "From learners" post strip under the hero. */
+export const HOME_DISCUSSION_V1: KnownExperiment = {
+  key: 'home_discussion_v1',
+  title: 'Home · learner posts strip',
+  flagColumn: HOME_DISCUSSION_FLAG_COLUMN,
+  arms: [
+    { id: 'control', label: 'Current Home (word of the day, tiles)' },
+    { id: 'strip', label: 'Learner posts strip under the hero, smaller word of the day' },
+  ],
+  metric: 'Discussion posts and replies per learner, D1 and D7 return, lessons started from Home',
+  keep: 'More posts or replies on strip with D1/D7 and lessons started flat or better',
+  kill: 'Lessons started from Home or D1/D7 drop on strip',
+  callAfter: '300+ exposed learners per arm · build with the flag must be live',
+}
+
+/** Free tier: lesson 1 then paywall vs one new free lesson a day through Conversation 1. */
+export const FREE_DAILY_LESSON_V1: KnownExperiment = {
+  key: 'free_daily_lesson_v1',
+  title: 'Free tier · one new lesson a day',
+  flagColumn: FREE_DAILY_LESSON_FLAG_COLUMN,
+  arms: [
+    { id: 'control', label: 'Lesson 1 free, then the paywall' },
+    { id: 'daily', label: 'One new free lesson a day through lesson 9, then the paywall' },
+  ],
+  metric:
+    'New sign-ups outside the free region: share with lessons on 2+ days in their first 14 (today 2 of 154), paid or trial per sign-up',
+  keep: 'Lesson days rise on daily and paid per sign-up is not clearly lower',
+  kill: 'Once 7 learners in total have paid or started a trial, 0 or 1 are in daily · or under 10% of daily do lessons on 2+ days',
+  callAfter:
+    'About 100 new sign-ups per arm, each 14 days old (about 12 weeks) · build 1.4.00+ live · close habit_reminders_v1 and intro_autoplay_v1 first',
+}
+
 /** Hub list — add rows here as new flags ship. Do not build a creation wizard. */
 export const KNOWN_EXPERIMENTS: KnownExperiment[] = [
   PAYWALL_FREE_N_V1,
@@ -129,4 +165,6 @@ export const KNOWN_EXPERIMENTS: KnownExperiment[] = [
   SPEAKING_TAP_REPS_V1,
   INTRO_AUTOPLAY_V1,
   HABIT_REMINDERS_V1,
+  HOME_DISCUSSION_V1,
+  FREE_DAILY_LESSON_V1,
 ]
