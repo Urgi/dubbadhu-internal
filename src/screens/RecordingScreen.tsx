@@ -806,7 +806,7 @@ export default function RecordingScreen({ navigation, route }: Props) {
               <Text style={styles.fidelSoundHint}>{current.word}</Text>
             </>
           ) : (
-            <Text style={styles.wordText} numberOfLines={2}>
+            <Text style={[styles.wordText, current.word.length > 24 && styles.wordTextLong]}>
               {current.word}
             </Text>
           )}
@@ -979,6 +979,11 @@ const styles = StyleSheet.create({
     fontSize: 32,
     fontWeight: '700',
     flexShrink: 1,
+  },
+  // Long phrases: smaller type and no line cap, so the whole sentence shows.
+  wordTextLong: {
+    fontSize: 22,
+    lineHeight: 30,
   },
   wordRow: {
     flexDirection: 'row',
