@@ -83,22 +83,45 @@ function cohortsInRange(rows: RetentionRow[], range: RetentionRange): RetentionR
   return rows.filter((r) => r.cohort_date >= lo && r.cohort_date <= hi)
 }
 
-/** Weighted retention: sum(retained) / sum(cohort_size) */
+/** UTC date `days` before today, as YYYY-MM-DD. */
+function ymdDaysAgoUTC(days: number): string {
+  const d = new Date()
+  d.setUTCDate(d.getUTCDate() - days)
+  return ymdUTC(d)
+}
+
+/**
+ * Weighted retention: sum(retained) / sum(cohort_size), counting only cohorts whose day N is over.
+ * A cohort that signed up fewer than N full days ago can't be retained yet, so including it
+ * pulled D7 to 0 on the 7d range.
+ */
 function weightedRetention(rows: RetentionRow[]) {
   let size = 0
+  let d1Size = 0
   let d1 = 0
+  let d7Size = 0
   let d7 = 0
+  const d1Cutoff = ymdDaysAgoUTC(2) // day 1 = yesterday at the latest
+  const d7Cutoff = ymdDaysAgoUTC(8) // day 7 = yesterday at the latest
   for (const r of rows) {
     size += r.cohort_size
-    d1 += r.d1_retained
-    d7 += r.d7_retained
+    if (r.cohort_date <= d1Cutoff) {
+      d1Size += r.cohort_size
+      d1 += r.d1_retained
+    }
+    if (r.cohort_date <= d7Cutoff) {
+      d7Size += r.cohort_size
+      d7 += r.d7_retained
+    }
   }
   if (size === 0) return null
   return {
     rows: rows.length,
     signups: size,
-    d1Pct: (d1 / size) * 100,
-    d7Pct: (d7 / size) * 100,
+    d1Signups: d1Size,
+    d7Signups: d7Size,
+    d1Pct: d1Size > 0 ? (d1 / d1Size) * 100 : null,
+    d7Pct: d7Size > 0 ? (d7 / d7Size) * 100 : null,
   }
 }
 
@@ -112,12 +135,12 @@ function RetentionDonut({
   labelShort,
   labelLong,
 }: {
-  pct: number
+  pct: number | null
   color: string
   labelShort: string
   labelLong: string
 }) {
-  const clamped = Math.min(100, Math.max(0, pct))
+  const clamped = pct == null ? 0 : Math.min(100, Math.max(0, pct))
   const offset = RING_C * (1 - clamped / 100)
   return (
     <View style={styles.ringWrap}>
@@ -140,8 +163,8 @@ function RetentionDonut({
           </Svg>
         </View>
         <View style={styles.ringCenter} pointerEvents="none">
-          <Text style={styles.ringPct}>{clamped.toFixed(1)}%</Text>
-          <Text style={styles.ringRetained}>retained</Text>
+          <Text style={styles.ringPct}>{pct == null ? '—' : `${clamped.toFixed(1)}%`}</Text>
+          <Text style={styles.ringRetained}>{pct == null ? 'too early' : 'retained'}</Text>
         </View>
       </View>
       <Text style={styles.ringLabel}>{labelShort}</Text>
@@ -363,7 +386,7 @@ export default function AdminAnalyticsScreen({ navigation }: Props) {
   const onRetentionInfo = useCallback(() => {
     Alert.alert(
       'Cohort retention',
-      'D1 and D7 show weighted retention for the selected window: total retained users divided by total cohort signups across those cohort rows. Data comes from retention_cohorts (up to 500 most recent rows loaded).',
+      'D1 and D7 show weighted retention for the selected window: retained users divided by signups, counting only signup days whose day 1 (or day 7) is already over. Signups too new to count are left out, so the 7d range shows D7 as "too early". Data comes from retention_cohorts (up to 500 most recent rows loaded).',
     )
   }, [])
 
@@ -747,13 +770,18 @@ export default function AdminAnalyticsScreen({ navigation }: Props) {
 
         {retentionStats ? (
           <View style={styles.retentionRow}>
-            <RetentionDonut pct={retentionStats.d1Pct} color={GOLD} labelShort="D1" labelLong="Day 1" />
+            <RetentionDonut
+              pct={retentionStats.d1Pct}
+              color={GOLD}
+              labelShort="D1"
+              labelLong={`Day 1 · ${retentionStats.d1Signups} signups`}
+            />
             <View style={styles.retentionDivider} />
             <RetentionDonut
               pct={retentionStats.d7Pct}
               color={GOLD_SOFT}
               labelShort="D7"
-              labelLong="Day 7"
+              labelLong={`Day 7 · ${retentionStats.d7Signups} signups`}
             />
           </View>
         ) : (

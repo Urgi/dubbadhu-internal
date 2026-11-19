@@ -19,6 +19,8 @@ export const HABIT_REMINDERS_FLAG_COLUMN = 'habit_reminders_experiment_enabled' 
 export const HOME_DISCUSSION_FLAG_COLUMN = 'home_discussion_experiment_enabled' as const
 /** Learner migration `app_config_free_daily_lesson_experiment`. Off until Internal starts the run. */
 export const FREE_DAILY_LESSON_FLAG_COLUMN = 'free_daily_lesson_experiment_enabled' as const
+/** Learner migration `app_config_guest_lesson_experiment`. Off until Internal starts the run. */
+export const GUEST_LESSON_FLAG_COLUMN = 'guest_lesson_experiment_enabled' as const
 
 export type ExperimentArm = {
   id: string
@@ -157,6 +159,22 @@ export const FREE_DAILY_LESSON_V1: KnownExperiment = {
     'About 100 new sign-ups per arm, each 14 days old (about 12 weeks) · build 1.4.00+ live · close habit_reminders_v1 and intro_autoplay_v1 first',
 }
 
+/** New installs: sign up, then lesson 1 vs lesson 1 first, then sign up to save it. */
+export const GUEST_LESSON_V1: KnownExperiment = {
+  key: 'guest_lesson_v1',
+  title: 'Sign-up · lesson 1 before the account',
+  flagColumn: GUEST_LESSON_FLAG_COLUMN,
+  arms: [
+    { id: 'control', label: 'Sign up first, then lesson 1' },
+    { id: 'guest', label: 'Language, lesson 1 with no account, then sign up to save it' },
+  ],
+  metric:
+    'Installs that see the language step (signup_step_viewed step 0, by guest_lesson_arm): share who sign up, share who finish lesson 1, share back on day 2',
+  keep: 'Lesson 1 finished per install is higher on guest and sign-ups per install are not clearly lower',
+  kill: 'Sign-ups per install drop by a third or more on guest after 200 installs per arm',
+  callAfter: 'About 300 installs per arm that saw the language step · build 1.4.01+ live',
+}
+
 /** Hub list — add rows here as new flags ship. Do not build a creation wizard. */
 export const KNOWN_EXPERIMENTS: KnownExperiment[] = [
   PAYWALL_FREE_N_V1,
@@ -167,4 +185,5 @@ export const KNOWN_EXPERIMENTS: KnownExperiment[] = [
   HABIT_REMINDERS_V1,
   HOME_DISCUSSION_V1,
   FREE_DAILY_LESSON_V1,
+  GUEST_LESSON_V1,
 ]
