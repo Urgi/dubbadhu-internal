@@ -1065,6 +1065,13 @@ export default function LessonConfigSeriesScreen({ navigation, route }: Props) {
         .eq('id', seriesId)
       if (!opts?.quiet) setSeriesStatusSaving(false)
       if (upErr) {
+        if (upErr.message.includes('missing_waveforms')) {
+          Alert.alert(
+            'Waveforms missing',
+            upErr.message.replace(/^.*missing_waveforms:\s*/, ''),
+          )
+          return false
+        }
         Alert.alert('Could not update status', withLessonSeriesRlsHint(upErr.message))
         return false
       }
