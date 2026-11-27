@@ -21,6 +21,8 @@ export const HOME_DISCUSSION_FLAG_COLUMN = 'home_discussion_experiment_enabled' 
 export const FREE_DAILY_LESSON_FLAG_COLUMN = 'free_daily_lesson_experiment_enabled' as const
 /** Learner migration `app_config_guest_lesson_experiment`. Off until Internal starts the run. */
 export const GUEST_LESSON_FLAG_COLUMN = 'guest_lesson_experiment_enabled' as const
+/** Learner migration `app_config_video_quiz_experiment`. Off until Internal starts the run. */
+export const VIDEO_QUIZ_FLAG_COLUMN = 'video_quiz_experiment_enabled' as const
 
 export type ExperimentArm = {
   id: string
@@ -175,6 +177,22 @@ export const GUEST_LESSON_V1: KnownExperiment = {
   callAfter: 'About 300 installs per arm that saw the language step · build 1.4.01+ live',
 }
 
+/** Series 1–6: intro video + audio quizzes vs no series intro + quiz questions played over the series video. */
+export const VIDEO_QUIZ_V1: KnownExperiment = {
+  key: 'video_quiz_v1',
+  title: 'Quiz over the video (Series 1–6)',
+  flagColumn: VIDEO_QUIZ_FLAG_COLUMN,
+  arms: [
+    { id: 'control', label: 'Series intro video, then lessons with the audio quizzes' },
+    { id: 'video', label: 'No series intro video; quiz questions play over the series video' },
+  ],
+  metric:
+    'Among exposed users who sign up after the start: lesson 1 finish, lesson 2 finish, week-1 return (metric_learner_returns). Split by video_quiz_segment (horn, other)',
+  keep: 'Lesson 1 finish holds and lesson 2 finish or week-1 return is higher on video',
+  kill: 'Lesson 1 finish drops on video after 60 starters per arm',
+  callAfter: 'About 100 lesson 1 starters per arm · new build live · free_daily_lesson_v1 also splits lesson 1 users',
+}
+
 /** Hub list — add rows here as new flags ship. Do not build a creation wizard. */
 export const KNOWN_EXPERIMENTS: KnownExperiment[] = [
   PAYWALL_FREE_N_V1,
@@ -186,4 +204,5 @@ export const KNOWN_EXPERIMENTS: KnownExperiment[] = [
   HOME_DISCUSSION_V1,
   FREE_DAILY_LESSON_V1,
   GUEST_LESSON_V1,
+  VIDEO_QUIZ_V1,
 ]
