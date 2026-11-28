@@ -12,6 +12,7 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit -p .",
+    "sync:vocab-sections": "tsx scripts/sync-vocab-sections.ts",
     "postinstall": "patch-package && (git config core.hooksPath .githooks || true)",
     "eas:ios:local": "EAS_BUILD_NO_EXPO_GO_WARNING=1 eas build --platform ios --profile production --local --non-interactive",
     "eas:ios:build-production": "EAS_BUILD_NO_EXPO_GO_WARNING=1 eas build --platform ios --profile production --non-interactive --no-wait",

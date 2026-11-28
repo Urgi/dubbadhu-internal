@@ -24,6 +24,7 @@ export type HubTileConfig = {
     | 'AdminMrrBurn'
     | 'AdminExperiments'
     | 'AdminLearnerLookup'
+    | 'AdminVocabHealth'
     | 'AdminFreeAccess'
     | 'AdminFidelBeta'
     | 'AdminSpeakQa'
@@ -139,6 +140,12 @@ export function buildSectionTiles(
         lines: ['Edit words + translations · generate/select pictures'],
         hint: 'Lexical assets and illustration review for the Vocab tab',
         route: 'AdminVocabIllustrationReview',
+      },
+      {
+        title: 'Vocab health',
+        lines: ['Words per section · missing audio and pictures'],
+        hint: 'Flags Vocab sections that would open empty in the app',
+        route: 'AdminVocabHealth',
       },
       {
         title: 'Qubee Letters',

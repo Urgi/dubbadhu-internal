@@ -21,6 +21,7 @@ import AdminSpeakQaScreen from './src/screens/AdminSpeakQaScreen'
 import AdminUsersScreen from './src/screens/AdminUsersScreen'
 import AdminUserTimelineScreen from './src/screens/AdminUserTimelineScreen'
 import AdminLearnerLookupScreen from './src/screens/AdminLearnerLookupScreen'
+import AdminVocabHealthScreen from './src/screens/AdminVocabHealthScreen'
 import AdminPracticeSuggestionsScreen from './src/screens/AdminPracticeSuggestionsScreen'
 import AdminCommunityReportsScreen from './src/screens/AdminCommunityReportsScreen'
 import AdminDiscussionReviewScreen from './src/screens/AdminDiscussionReviewScreen'
@@ -133,6 +134,11 @@ function AppStack() {
           name="AdminUsers"
           component={AdminUsersScreen}
           options={{ title: 'Registered users' }}
+        />
+        <Stack.Screen
+          name="AdminVocabHealth"
+          component={AdminVocabHealthScreen}
+          options={{ title: 'Vocab health' }}
         />
         <Stack.Screen
           name="AdminLearnerLookup"
