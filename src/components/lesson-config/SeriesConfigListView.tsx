@@ -23,6 +23,7 @@ import {
 } from './AdminLessonConfigChrome'
 import { useAuth } from '../../context/AuthContext'
 import { seriesStatusLabel, normalizeSeriesStatus } from '../../lib/lessonSeriesStatus'
+import { fetchSeriesReadiness } from '../../lib/seriesReadiness'
 import supabase from '../../lib/supabase'
 import type { RootStackParamList } from '../../types'
 
@@ -97,6 +98,20 @@ export default function SeriesConfigListView({ navigation }: Props) {
     [suggestedSeriesId, suggestedSort],
   )
 
+  /** Publish checklist per series: red labels, or [] when all green. Loaded after the list. */
+  const [redChecksById, setRedChecksById] = useState<Record<string, string[]>>({})
+
+  const loadReadiness = useCallback(async (ids: string[]) => {
+    const next: Record<string, string[]> = {}
+    await Promise.all(
+      ids.map(async (id) => {
+        const res = await fetchSeriesReadiness(supabase, id)
+        if (res.data) next[id] = res.data.checks.filter((c) => !c.ok).map((c) => c.label)
+      }),
+    )
+    setRedChecksById(next)
+  }, [])
+
   const load = useCallback(async () => {
     setError('')
 
@@ -115,6 +130,7 @@ export default function SeriesConfigListView({ navigation }: Props) {
         })),
       )
       setLoading(false)
+      void loadReadiness((seriesData as SeriesRow[]).map((r) => r.id))
       return
     }
 
@@ -146,7 +162,7 @@ export default function SeriesConfigListView({ navigation }: Props) {
       })),
     )
     setLoading(false)
-  }, [])
+  }, [loadReadiness])
 
   useFocusEffect(
     useCallback(() => {
@@ -261,6 +277,21 @@ export default function SeriesConfigListView({ navigation }: Props) {
                   >
                     {item.audio_recorded === true ? 'Audio complete' : 'Audio not complete'}
                   </Text>
+                  {redChecksById[item.id] ? (
+                    <View style={styles.readyRow}>
+                      <View
+                        style={[
+                          styles.readyDot,
+                          { backgroundColor: redChecksById[item.id].length ? '#f87171' : '#4ade80' },
+                        ]}
+                      />
+                      <Text style={styles.readyText} numberOfLines={2}>
+                        {redChecksById[item.id].length
+                          ? `Not ready: ${redChecksById[item.id].join(', ')}`
+                          : 'Ready to publish'}
+                      </Text>
+                    </View>
+                  ) : null}
                 </View>
                 <AdminChevronRight size={10} color="#636366" />
               </View>
@@ -411,4 +442,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#fff',
   },
+  readyRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
+  readyDot: { width: 8, height: 8, borderRadius: 4 },
+  readyText: { flex: 1, color: '#9ca3af', fontSize: 12 },
 })
+
