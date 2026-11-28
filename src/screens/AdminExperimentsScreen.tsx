@@ -23,6 +23,12 @@ import {
   type ExperimentResults,
 } from '../lib/experimentResults'
 import { KNOWN_EXPERIMENTS, type KnownExperiment } from '../lib/experiments'
+import {
+  fetchExperimentMetrics,
+  formatCell,
+  type ExperimentMetrics,
+  type MetricVerdictKind,
+} from '../lib/experimentMetrics'
 import supabase from '../lib/supabase'
 import type { RootStackParamList } from '../types'
 
@@ -41,10 +47,77 @@ function formatRangeLabel(results: ExperimentResults): string {
   return `${new Date(results.sinceIso).toLocaleDateString()} – ${new Date(results.untilIso).toLocaleDateString()}`
 }
 
+const VERDICT_COLOR: Record<MetricVerdictKind, string> = {
+  not_enough: '#8e8e93',
+  chance: '#fbbf24',
+  likely_real: '#4ade80',
+  no_control: '#8e8e93',
+}
+
+function TestResultsCard({
+  experiment,
+  metrics,
+  error,
+}: {
+  experiment: KnownExperiment
+  metrics: ExperimentMetrics | null
+  error: string | null
+}) {
+  return (
+    <View style={styles.testCard}>
+      <Text style={styles.sectionLabel}>Test results · shared metric views</Text>
+      <Text style={styles.thresholdLine}>Keep if · {experiment.keep}</Text>
+      <Text style={styles.thresholdKill}>Kill if · {experiment.kill}</Text>
+      {error ? <Text style={styles.warnText}>{error}</Text> : null}
+      {!metrics && !error ? <ActivityIndicator color={ADMIN_ACCENT_GOLD} style={{ marginTop: 8 }} /> : null}
+      {metrics ? (
+        <>
+          <View style={[styles.testRow, styles.testHeadRow]}>
+            <Text style={[styles.testMetric, styles.testHead]}>Learners</Text>
+            {metrics.arms.map((a) => (
+              <Text key={a.arm} style={[styles.testCell, styles.testHead]} numberOfLines={2}>
+                {a.label}
+                {'\n'}
+                <Text style={styles.testCellStrong}>{a.learners}</Text>
+              </Text>
+            ))}
+          </View>
+          {metrics.rows.map((row) => (
+            <View key={row.key} style={styles.testBlock}>
+              <View style={styles.testRow}>
+                <Text style={styles.testMetric}>{row.label}</Text>
+                {row.cells.map((cell, i) => (
+                  <Text key={i} style={styles.testCell}>
+                    {formatCell(cell)}
+                  </Text>
+                ))}
+              </View>
+              {row.verdicts.map((v, i) => (
+                <Text key={i} style={[styles.testVerdict, { color: VERDICT_COLOR[v.kind] }]}>
+                  {row.verdicts.length > 1 && v.arm ? `${v.arm}: ` : ''}
+                  {v.text}
+                </Text>
+              ))}
+            </View>
+          ))}
+          <Text style={styles.rangeMeta}>
+            Week-1 return counts only learners who signed up 14+ days ago. Left out: {metrics.excludedTest} test
+            account(s), {metrics.excludedEt} Ethiopia free-lesson learner(s). Two-proportion test vs the first arm,
+            p &lt; 0.05; needs {30}+ learners per arm.
+          </Text>
+          {metrics.truncated ? <Text style={styles.warnText}>Exposures truncated at the fetch cap.</Text> : null}
+        </>
+      ) : null}
+    </View>
+  )
+}
+
 function ExperimentCard({
   experiment,
   flag,
   results,
+  metrics,
+  metricsError,
   range,
   saving,
   onRange,
@@ -53,6 +126,8 @@ function ExperimentCard({
   experiment: KnownExperiment
   flag: FlagState | null
   results: ExperimentResults
+  metrics: ExperimentMetrics | null
+  metricsError: string | null
   range: ExperimentDateRange
   saving: boolean
   onRange: (next: ExperimentDateRange) => void
@@ -92,7 +167,9 @@ function ExperimentCard({
       <Text style={styles.thresholdKill}>Kill · {experiment.kill}</Text>
       <Text style={styles.thresholdLine}>Call · {experiment.callAfter}</Text>
 
-      <Text style={styles.sectionLabel}>Results</Text>
+      <TestResultsCard experiment={experiment} metrics={metrics} error={metricsError} />
+
+      <Text style={styles.sectionLabel}>Raw events</Text>
       <View style={styles.timeFilter}>
         {(
           [
@@ -155,21 +232,27 @@ export default function AdminExperimentsScreen({ navigation }: Props) {
   const [countryScope, setCountryScope] = useState<ExperimentCountryScope>('all')
   const [flags, setFlags] = useState<Record<string, FlagState>>({})
   const [resultsByKey, setResultsByKey] = useState<Record<string, ExperimentResults>>({})
+  const [metricsByKey, setMetricsByKey] = useState<
+    Record<string, { data: ExperimentMetrics | null; error: string | null }>
+  >({})
   const [error, setError] = useState('')
 
   const load = useCallback(async () => {
     const errs: string[] = []
     const nextFlags: Record<string, FlagState> = {}
     const nextResults: Record<string, ExperimentResults> = {}
+    const nextMetrics: Record<string, { data: ExperimentMetrics | null; error: string | null }> = {}
 
     await Promise.all(
       KNOWN_EXPERIMENTS.map(async (experiment) => {
-        const [flagRes, resultsRes] = await Promise.all([
+        const [flagRes, resultsRes, metricsRes] = await Promise.all([
           experiment.flagColumn
             ? fetchExperimentFlag(supabase, experiment.flagColumn)
             : Promise.resolve({ enabled: true, updatedAt: null, error: null as string | null }),
           fetchExperimentResults(supabase, experiment, range, countryScope),
+          fetchExperimentMetrics(supabase, experiment, range, countryScope),
         ])
+        nextMetrics[experiment.key] = metricsRes
         if (flagRes.error) errs.push(`${experiment.key} flag: ${flagRes.error}`)
         nextFlags[experiment.key] = {
           enabled: flagRes.enabled,
@@ -182,6 +265,7 @@ export default function AdminExperimentsScreen({ navigation }: Props) {
 
     setFlags(nextFlags)
     setResultsByKey(nextResults)
+    setMetricsByKey(nextMetrics)
     setError(errs.join('\n'))
   }, [countryScope, range])
 
@@ -310,6 +394,8 @@ export default function AdminExperimentsScreen({ navigation }: Props) {
           experiment={experiment}
           flag={flags[experiment.key] ?? null}
           results={resultsByKey[experiment.key] ?? emptyResults(experiment, range)}
+          metrics={metricsByKey[experiment.key]?.data ?? null}
+          metricsError={metricsByKey[experiment.key]?.error ?? null}
           range={range}
           saving={savingKey === experiment.key}
           onRange={setRange}
@@ -405,4 +491,20 @@ const styles = StyleSheet.create({
   },
   metricValue: { color: '#fff', fontSize: 20, fontWeight: '700' },
   metricLabel: { color: '#888', fontSize: 11, marginTop: 2 },
+  testCard: {
+    marginTop: 12,
+    backgroundColor: '#141414',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#2a2a2a',
+  },
+  testHeadRow: { borderBottomWidth: 1, borderBottomColor: '#2a2a2a', paddingBottom: 6, marginTop: 10 },
+  testBlock: { borderBottomWidth: 1, borderBottomColor: '#1f1f1f', paddingVertical: 6 },
+  testRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
+  testMetric: { flex: 1.1, color: '#d1d5db', fontSize: 12, fontWeight: '600' },
+  testHead: { color: '#8e8e93', fontSize: 11, fontWeight: '600' },
+  testCell: { flex: 1, color: '#fff', fontSize: 12, fontVariant: ['tabular-nums'] },
+  testCellStrong: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  testVerdict: { fontSize: 12, fontWeight: '600', marginTop: 3 },
 })
