@@ -22,6 +22,7 @@ import AdminUsersScreen from './src/screens/AdminUsersScreen'
 import AdminUserTimelineScreen from './src/screens/AdminUserTimelineScreen'
 import AdminLearnerLookupScreen from './src/screens/AdminLearnerLookupScreen'
 import AdminVocabHealthScreen from './src/screens/AdminVocabHealthScreen'
+import AdminPhraseReviewScreen from './src/screens/AdminPhraseReviewScreen'
 import AdminPracticeSuggestionsScreen from './src/screens/AdminPracticeSuggestionsScreen'
 import AdminCommunityReportsScreen from './src/screens/AdminCommunityReportsScreen'
 import AdminDiscussionReviewScreen from './src/screens/AdminDiscussionReviewScreen'
@@ -134,6 +135,11 @@ function AppStack() {
           name="AdminUsers"
           component={AdminUsersScreen}
           options={{ title: 'Registered users' }}
+        />
+        <Stack.Screen
+          name="AdminPhraseReview"
+          component={AdminPhraseReviewScreen}
+          options={{ title: 'Phrase review' }}
         />
         <Stack.Screen
           name="AdminVocabHealth"

@@ -51,6 +51,7 @@ export type RootStackParamList = {
   AdminExperiments: undefined
   AdminLearnerLookup: undefined
   AdminVocabHealth: undefined
+  AdminPhraseReview: undefined
   /** Registered / cohort drill-ins from Analytics (active, notifications, activated, premium…). */
   AdminUsers:
     | {
