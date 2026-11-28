@@ -4228,6 +4228,8 @@ export function LessonScreenEditModal({
                       const next = { ...cur }
                       delete next.communityDiscussionEnabled
                       delete next.communityDiscussionPrompt
+                      delete next.communityDiscussionCommentPills
+                      delete next.communityDiscussionReplyPills
                       delete next.communityDiscussionAllowedEnglish
                       delete next.quickReplyEmoji
                       return next
@@ -4251,6 +4253,32 @@ export function LessonScreenEditModal({
                 <Text style={styles.hint}>
                   Spell the target word exactly as learners must type it (quote it, or “Say Akkam…”). Tap i for the full notes.
                 </Text>
+                <DiscussionPillsField
+                  label="Comment pills (new comment, max 6)"
+                  hint="Ready-made messages a learner can tap to post. Each pill is the whole message, emoji allowed (e.g. Akkam 👋)."
+                  value={c.communityDiscussionCommentPills}
+                  onChange={(next) =>
+                    setContent((cur) => {
+                      const out = { ...cur }
+                      if (next) out.communityDiscussionCommentPills = next
+                      else delete out.communityDiscussionCommentPills
+                      return out
+                    })
+                  }
+                />
+                <DiscussionPillsField
+                  label="Reply pills (reply to someone, max 6)"
+                  hint="Shown when a learner replies to a comment (e.g. Galatoomi 🙏)."
+                  value={c.communityDiscussionReplyPills}
+                  onChange={(next) =>
+                    setContent((cur) => {
+                      const out = { ...cur }
+                      if (next) out.communityDiscussionReplyPills = next
+                      else delete out.communityDiscussionReplyPills
+                      return out
+                    })
+                  }
+                />
                 <Field
                   label="Allowed English / non-Oromo (AI only, optional)"
                   value={String(c.communityDiscussionAllowedEnglish ?? '')}
@@ -4422,6 +4450,32 @@ export function LessonScreenEditModal({
             <Text style={styles.hint}>
               Topic is extra context for moderation. Learners see the prompt, not this field.
             </Text>
+            <DiscussionPillsField
+              label="Comment pills (new comment, max 6)"
+              hint="Ready-made messages a learner can tap to post. Each pill is the whole message, emoji allowed (e.g. Akkam 👋)."
+              value={c.communityDiscussionCommentPills}
+              onChange={(next) =>
+                setContent((cur) => {
+                  const out = { ...cur }
+                  if (next) out.communityDiscussionCommentPills = next
+                  else delete out.communityDiscussionCommentPills
+                  return out
+                })
+              }
+            />
+            <DiscussionPillsField
+              label="Reply pills (reply to someone, max 6)"
+              hint="Shown when a learner replies to a comment (e.g. Galatoomi 🙏)."
+              value={c.communityDiscussionReplyPills}
+              onChange={(next) =>
+                setContent((cur) => {
+                  const out = { ...cur }
+                  if (next) out.communityDiscussionReplyPills = next
+                  else delete out.communityDiscussionReplyPills
+                  return out
+                })
+              }
+            />
           </View>
         )
       }
@@ -5699,6 +5753,52 @@ function InfoCircleButton(props: { onPress: () => void }) {
     >
       <Text style={styles.infoBtnText}>i</Text>
     </Pressable>
+  )
+}
+
+/** Up to 6 ready-made discussion messages (learner app: Dubbadhu/utils/discussionPills.js). */
+const MAX_DISCUSSION_PILLS = 6
+
+function DiscussionPillsField(props: {
+  label: string
+  hint: string
+  value: unknown
+  onChange: (next: string[] | undefined) => void
+}) {
+  const ro = useLessonEditorReadOnly()
+  const pills: string[] = Array.isArray(props.value)
+    ? props.value.map((x) => String(x ?? ''))
+    : typeof props.value === 'string' && props.value.trim()
+      ? props.value.split(/[\n,]/).map((x) => x.trim())
+      : []
+  const update = (next: string[]) => props.onChange(next.length ? next.slice(0, MAX_DISCUSSION_PILLS) : undefined)
+  return (
+    <View style={styles.field}>
+      <Text style={styles.label}>{props.label}</Text>
+      <Text style={styles.hint}>{props.hint}</Text>
+      {pills.map((pill, i) => (
+        <View key={i} style={styles.bulletRow}>
+          <AdminTextInput
+            style={styles.bulletInput}
+            value={pill}
+            editable={!ro}
+            onChangeText={(t) => update(pills.map((x, j) => (j === i ? t.slice(0, 60) : x)))}
+            placeholder={`Pill ${i + 1}`}
+            placeholderTextColor="#52525b"
+          />
+          <Pressable style={styles.bulletMiniBtn} onPress={() => update(pills.filter((_, j) => j !== i))} disabled={ro}>
+            <Text style={styles.bulletMiniBtnTextDanger}>✕</Text>
+          </Pressable>
+        </View>
+      ))}
+      <Pressable
+        style={styles.addBtn}
+        onPress={() => update([...pills, ''])}
+        disabled={ro || pills.length >= MAX_DISCUSSION_PILLS}
+      >
+        <Text style={[styles.addBtnText, pills.length >= MAX_DISCUSSION_PILLS && styles.bulletMiniDisabled]}>+ Add pill</Text>
+      </Pressable>
+    </View>
   )
 }
 
