@@ -23,6 +23,7 @@ export type HubTileConfig = {
     | 'AdminAnalytics'
     | 'AdminMrrBurn'
     | 'AdminExperiments'
+    | 'AdminLearnerLookup'
     | 'AdminFreeAccess'
     | 'AdminFidelBeta'
     | 'AdminSpeakQa'
@@ -107,6 +108,12 @@ export function buildSectionTiles(
         lines: ['A/B flags · results by arm'],
         hint: 'Toggle live experiments and read arm results.',
         route: 'AdminExperiments',
+      },
+      {
+        title: 'Learner lookup',
+        lines: ['Search name, email or phone'],
+        hint: 'One timeline: signup, lessons, paywall, purchases, RevenueCat, issue reports, emails.',
+        route: 'AdminLearnerLookup',
       },
     ]
   }

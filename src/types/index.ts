@@ -49,6 +49,7 @@ export type RootStackParamList = {
   AdminMrrBurn: undefined
   /** Known learner A/B tests (flags on app_config + analytics_events results). */
   AdminExperiments: undefined
+  AdminLearnerLookup: undefined
   /** Registered / cohort drill-ins from Analytics (active, notifications, activated, premium…). */
   AdminUsers:
     | {

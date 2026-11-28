@@ -20,6 +20,7 @@ import AdminFidelBetaScreen from './src/screens/AdminFidelBetaScreen'
 import AdminSpeakQaScreen from './src/screens/AdminSpeakQaScreen'
 import AdminUsersScreen from './src/screens/AdminUsersScreen'
 import AdminUserTimelineScreen from './src/screens/AdminUserTimelineScreen'
+import AdminLearnerLookupScreen from './src/screens/AdminLearnerLookupScreen'
 import AdminPracticeSuggestionsScreen from './src/screens/AdminPracticeSuggestionsScreen'
 import AdminCommunityReportsScreen from './src/screens/AdminCommunityReportsScreen'
 import AdminDiscussionReviewScreen from './src/screens/AdminDiscussionReviewScreen'
@@ -132,6 +133,11 @@ function AppStack() {
           name="AdminUsers"
           component={AdminUsersScreen}
           options={{ title: 'Registered users' }}
+        />
+        <Stack.Screen
+          name="AdminLearnerLookup"
+          component={AdminLearnerLookupScreen}
+          options={{ title: 'Learner lookup' }}
         />
         <Stack.Screen
           name="AdminUserTimeline"
