@@ -23,6 +23,9 @@ export type HubTileConfig = {
     | 'AdminAnalytics'
     | 'AdminMrrBurn'
     | 'AdminExperiments'
+    | 'AdminLearnerLookup'
+    | 'AdminVocabHealth'
+    | 'AdminPhraseReview'
     | 'AdminFreeAccess'
     | 'AdminFidelBeta'
     | 'AdminSpeakQa'
@@ -108,6 +111,12 @@ export function buildSectionTiles(
         hint: 'Toggle live experiments and read arm results.',
         route: 'AdminExperiments',
       },
+      {
+        title: 'Learner lookup',
+        lines: ['Search name, email or phone'],
+        hint: 'One timeline: signup, lessons, paywall, purchases, RevenueCat, issue reports, emails.',
+        route: 'AdminLearnerLookup',
+      },
     ]
   }
   if (section === 'assets') {
@@ -132,6 +141,18 @@ export function buildSectionTiles(
         lines: ['Edit words + translations · generate/select pictures'],
         hint: 'Lexical assets and illustration review for the Vocab tab',
         route: 'AdminVocabIllustrationReview',
+      },
+      {
+        title: 'Vocab health',
+        lines: ['Words per section · missing audio and pictures'],
+        hint: 'Flags Vocab sections that would open empty in the app',
+        route: 'AdminVocabHealth',
+      },
+      {
+        title: 'Phrase review',
+        lines: ['Native-speaker checks · approve or fix'],
+        hint: 'Blog [CHECK] phrases and words still being worked on, with who reviewed them',
+        route: 'AdminPhraseReview',
       },
       {
         title: 'Qubee Letters',

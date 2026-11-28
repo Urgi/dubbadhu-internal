@@ -46,6 +46,7 @@ import {
 } from '../lib/mrrBurn'
 import { loadMrrBurnState } from '../lib/mrrBurnStorage'
 import { active24hPercent, fetchActive24hStats } from '../lib/adminUsers'
+import WeeklyMetricsCard from '../components/WeeklyMetricsCard'
 import supabase from '../lib/supabase'
 import type { RootStackParamList } from '../types'
 
@@ -461,6 +462,8 @@ export default function AdminHomeScreen({ navigation }: Props) {
         </View>
       ) : null}
       {error ? <Text style={styles.errorBanner}>{error}</Text> : null}
+
+      <WeeklyMetricsCard onPress={() => navigation.navigate('AdminAnalytics')} />
 
       <Pressable
         style={({ pressed }) => [styles.sectionCard, pressed && styles.sectionCardPressed]}

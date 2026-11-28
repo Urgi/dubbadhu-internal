@@ -996,6 +996,24 @@ function sanitizeQuizOptionsArray(opts: unknown): unknown {
  * Strip content keys the learner app and admin forms never read, so Supabase JSON stays aligned
  * with the structured editor. Run after type-specific normalizers.
  */
+/** Discussion pills: trimmed, deduped, 2–60 chars, max 6 (learner: Dubbadhu/utils/discussionPills.js). */
+function sanitizeDiscussionPillsForPersistence(base: Record<string, unknown>): void {
+  for (const key of ['communityDiscussionCommentPills', 'communityDiscussionReplyPills'] as const) {
+    const raw = base[key]
+    const items = Array.isArray(raw) ? raw : typeof raw === 'string' ? raw.split(/[\n,]/) : []
+    const out: string[] = []
+    for (const item of items) {
+      const text = String(item ?? '').replace(/\s+/g, ' ').trim()
+      if (text.length < 2 || text.length > 60) continue
+      if (out.some((x) => x.toLowerCase() === text.toLowerCase())) continue
+      out.push(text)
+      if (out.length >= 6) break
+    }
+    if (out.length) base[key] = out
+    else delete base[key]
+  }
+}
+
 export function sanitizeScreenContentForPersistence(
   type: ScreenType,
   content: Record<string, unknown>,
@@ -1194,6 +1212,8 @@ export function sanitizeScreenContentForPersistence(
           'communityDiscussionPrompt',
           'communityDiscussionAllowedEnglish',
           'quickReplyEmoji',
+          'communityDiscussionCommentPills',
+          'communityDiscussionReplyPills',
           'vocabSectionId',
         ]),
       )
@@ -1227,11 +1247,14 @@ export function sanitizeScreenContentForPersistence(
         }
         if (Object.keys(emoji).length) base.quickReplyEmoji = emoji
         else delete base.quickReplyEmoji
+        sanitizeDiscussionPillsForPersistence(base)
       } else {
         delete base.communityDiscussionEnabled
         delete base.communityDiscussionPrompt
         delete base.communityDiscussionAllowedEnglish
         delete base.quickReplyEmoji
+        delete base.communityDiscussionCommentPills
+        delete base.communityDiscussionReplyPills
       }
       const msg = base.message
       if (msg == null || !String(msg).trim()) delete base.message
@@ -1334,12 +1357,13 @@ export function sanitizeScreenContentForPersistence(
       return base
     }
     case 'communityBoard': {
-      const base = pickAllowedKeys(content, new Set(['prompt', 'topic']))
+      const base = pickAllowedKeys(content, new Set(['prompt', 'topic', 'communityDiscussionCommentPills', 'communityDiscussionReplyPills']))
       for (const k of ['prompt', 'topic'] as const) {
         const v = base[k]
         if (v == null || !String(v).trim()) delete base[k]
         else base[k] = String(v).trim()
       }
+      sanitizeDiscussionPillsForPersistence(base)
       return base
     }
     case 'word-breakdown': {

@@ -72,6 +72,8 @@ import {
 import { HOME_CONTINUE_CARD_ASPECT } from '../lib/homeHeroCover'
 import supabase from '../lib/supabase'
 import { findVideoReviewScreensMissingUrl, type VideoReviewGap } from '../lib/lessonVideoReviewGate'
+import { fetchSeriesReadiness, type SeriesReadiness } from '../lib/seriesReadiness'
+import SeriesReadinessCard from '../components/SeriesReadinessCard'
 import { VOICE_BANK_LANGUAGE, wordsBankSeriesLabelFromSeriesId } from '../lib/voiceBankLabels'
 import type { RootStackParamList } from '../types'
 
@@ -203,6 +205,9 @@ export default function LessonConfigSeriesScreen({ navigation, route }: Props) {
   const [introVideoNoTranslationUrl, setIntroVideoNoTranslationUrl] = useState<string | null>(null)
   const [introVideoSaving, setIntroVideoSaving] = useState(false)
   const [videoReviewGaps, setVideoReviewGaps] = useState<VideoReviewGap[]>([])
+  const [readiness, setReadiness] = useState<SeriesReadiness | null>(null)
+  const [readinessError, setReadinessError] = useState<string | null>(null)
+  const [readinessLoading, setReadinessLoading] = useState(false)
   const [lessonReorderSaving, setLessonReorderSaving] = useState(false)
   const [lessonToMove, setLessonToMove] = useState<LessonRow | null>(null)
   const [lessonMoveSeries, setLessonMoveSeries] = useState<LessonMoveSeriesOption[]>([])
@@ -1116,6 +1121,14 @@ export default function LessonConfigSeriesScreen({ navigation, route }: Props) {
   ])
 
   const onPublishToLearnerCatalog = useCallback(() => {
+    if (!readiness?.ready) {
+      const red = readiness?.checks.filter((c) => !c.ok).map((c) => c.label) ?? []
+      Alert.alert(
+        'Not ready to publish',
+        red.length ? `Fix these first:\n\n• ${red.join('\n• ')}` : 'Wait for the readiness check to finish.',
+      )
+      return
+    }
     Alert.alert(
       'Publish to learner catalog?',
       'Production builds list only published series on Speak. Continue when this series is ready for all learners.',
@@ -1131,7 +1144,7 @@ export default function LessonConfigSeriesScreen({ navigation, route }: Props) {
         },
       ],
     )
-  }, [persistSeriesStatus, load])
+  }, [persistSeriesStatus, load, readiness])
 
   const onApproveContent = useCallback(async () => {
     if (!lessonSeriesRowExists || !canAdminApproveCurriculum) return
@@ -1560,11 +1573,21 @@ export default function LessonConfigSeriesScreen({ navigation, route }: Props) {
     navigation.setOptions({ title: seriesTitle || seriesId })
   }, [navigation, seriesId, seriesTitle])
 
+  const loadReadiness = useCallback(async () => {
+    if (!isAdmin) return
+    setReadinessLoading(true)
+    const res = await fetchSeriesReadiness(supabase, seriesId)
+    setReadiness(res.data)
+    setReadinessError(res.error)
+    setReadinessLoading(false)
+  }, [isAdmin, seriesId])
+
   useFocusEffect(
     useCallback(() => {
       setLoading(true)
       void load()
-    }, [load]),
+      void loadReadiness()
+    }, [load, loadReadiness]),
   )
 
   if (loading && lessons.length === 0 && !error) {
@@ -1805,6 +1828,12 @@ export default function LessonConfigSeriesScreen({ navigation, route }: Props) {
           ) : null}
           {showAdminPipeline ? (
             <>
+              <SeriesReadinessCard
+                readiness={readiness}
+                error={readinessError}
+                loading={readinessLoading}
+                onRefresh={() => void loadReadiness()}
+              />
               {canAdminApproveCurriculum ? (
                 <Pressable
                   style={[
@@ -2053,7 +2082,7 @@ export default function LessonConfigSeriesScreen({ navigation, route }: Props) {
                   <Pressable
                     style={[
                       styles.primaryOutlineBtn,
-                      (seriesStatusSaving || vaSyncing) && styles.btnDisabledOpacity,
+                      (seriesStatusSaving || vaSyncing || !readiness?.ready) && styles.btnDisabledOpacity,
                     ]}
                     onPress={() => void onPublishToLearnerCatalog()}
                     disabled={seriesStatusSaving || vaSyncing}

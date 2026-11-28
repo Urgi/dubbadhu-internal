@@ -1,0 +1,9 @@
+#!/bin/sh
+# Block commits that add TypeScript errors. Skip with: git commit --no-verify
+if git diff --cached --name-only --diff-filter=ACMR | grep -qE '\.(ts|tsx)$|^tsconfig\.json$'; then
+  echo "pre-commit: running typecheck (npm run typecheck)..."
+  npm run -s typecheck || {
+    echo "pre-commit: typecheck failed. Fix the errors above, then commit again."
+    exit 1
+  }
+fi
