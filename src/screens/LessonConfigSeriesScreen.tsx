@@ -379,7 +379,7 @@ export default function LessonConfigSeriesScreen({ navigation, route }: Props) {
           .select(seriesSelectWithoutHero)
           .eq('id', seriesId)
           .maybeSingle()
-        seriesRow = fallback.data
+        seriesRow = fallback.data as typeof seriesRow
         seriesErr = fallback.error
       }
 
@@ -767,7 +767,7 @@ export default function LessonConfigSeriesScreen({ navigation, route }: Props) {
   const persistHomeCoverFile = useCallback(
     async (localUri: string) => {
       if (shouldConfirmAdminLiveSeriesSave(role ?? undefined, seriesStatus)) {
-        const proceed = await confirmAdminLiveSeriesSave(seriesStatus, 'Home cover')
+        const proceed = await confirmAdminLiveSeriesSave(seriesStatus, 'home cover')
         if (!proceed) return
       }
       setHomeCoverUploading(true)
@@ -848,7 +848,7 @@ export default function LessonConfigSeriesScreen({ navigation, route }: Props) {
   const clearHomeCover = useCallback(async () => {
     if (!lessonSeriesRowExists || !scriptEditable) return
     if (shouldConfirmAdminLiveSeriesSave(role ?? undefined, seriesStatus)) {
-      const proceed = await confirmAdminLiveSeriesSave(seriesStatus, 'Home cover')
+      const proceed = await confirmAdminLiveSeriesSave(seriesStatus, 'home cover')
       if (!proceed) return
     }
     setHomeCoverUploading(true)

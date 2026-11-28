@@ -28,6 +28,8 @@ export type AdminLiveSeriesSaveContext =
   | 'series title'
   | 'series script'
   | 'series cover'
+  | 'home cover'
+  | 'hero cover'
   | 'series intro video'
   | 'series no-translation video'
   | 'speaker photo'
@@ -60,6 +62,10 @@ export function confirmAdminLiveSeriesSave(
           return 'The series intro script'
         case 'series cover':
           return 'The Speak tab cover'
+        case 'home cover':
+          return 'The Home cover'
+        case 'hero cover':
+          return 'The hero cover'
         case 'series no-translation video':
           return 'The series no-translation video'
         case 'speaker photo':

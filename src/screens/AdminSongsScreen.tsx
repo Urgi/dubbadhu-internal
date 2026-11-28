@@ -71,6 +71,18 @@ function textToPhrases(text: string): { term: string; english: string }[] {
     .filter((p) => p.term || p.english)
 }
 
+type SongDraft = {
+  id?: string
+  language: 'oromo' | 'amharic'
+  type: string
+  title: string
+  artist: string
+  youtube_url: string
+  description: string
+  phrasesText: string
+  is_published: boolean
+}
+
 function emptyDraft(language: 'oromo' | 'amharic'): SongDraft {
   return {
     language,

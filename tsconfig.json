@@ -3,5 +3,5 @@
   "compilerOptions": {
     "strict": true
   },
-  "exclude": ["supabase", "scripts/obsidian-quality-check.ts"]
+  "exclude": ["supabase", "scripts/obsidian-quality-check.ts", "scripts/obsidian-purge-sql-check.ts"]
 }
